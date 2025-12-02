@@ -129,20 +129,28 @@ export const calculateStandings = (teamData, games) => {
       let newLosses = data.losses;
       let newTies = data.ties;
       
-      if (result.teamScore > result.oppScore) {
+      // Convert scores to numbers for comparison
+      const teamScore = Number(result.teamScore) || 110;
+      const oppScore = Number(result.oppScore) || 110;
+      
+      if (teamScore > oppScore) {
         newWins++;
-      } else if (result.teamScore < result.oppScore) {
+      } else if (teamScore < oppScore) {
         newLosses++;
       } else {
         newTies++;
       }
+
+      // Ensure both values are numbers before adding
+      const week14Score = Number(data.week14Score) || 110;
+      const totalPointsFor = Number(data.pointsFor) + week14Score;
 
       return {
         name,
         wins: newWins,
         losses: newLosses,
         ties: newTies,
-        pointsFor: data.pointsFor + data.week14Score,
+        pointsFor: totalPointsFor,
         inPlayoffs: false  // calculated after sort
       };
     })
@@ -158,8 +166,11 @@ export const calculateStandings = (teamData, games) => {
 };
 
 export const getGameResult = (score1, score2, team1, team2) => {
-  if (score1 === score2) return "TIE";
-  const winner = score1 > score2 ? team1 : team2;
-  const margin = Math.abs(score1 - score2);
+  const num1 = Number(score1) || 110;
+  const num2 = Number(score2) || 110;
+  
+  if (num1 === num2) return "TIE";
+  const winner = num1 > num2 ? team1 : team2;
+  const margin = Math.abs(num1 - num2);
   return `${winner} by ${margin.toFixed(1)}`;
 };

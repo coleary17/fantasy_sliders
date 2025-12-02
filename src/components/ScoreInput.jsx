@@ -8,13 +8,13 @@ const ScoreInput = ({ score, onScoreChange, teamName }) => {
 
   const handleInputChange = (e) => {
     const value = e.target.value;
-    // Allow temporary invalid input for typing, but validate on blur
+    // Allow temporary invalid input for typing
     if (value === '') {
       onScoreChange('');
       return;
     }
-    const validatedScore = validateScore(value);
-    onScoreChange(validatedScore);
+    // Don't validate immediately - let user type decimal values
+    onScoreChange(value);
   };
 
   const handleInputBlur = (e) => {
@@ -31,16 +31,17 @@ const ScoreInput = ({ score, onScoreChange, teamName }) => {
   const sliderScore = score === '' ? 110 : score;
 
   return (
-    <div className="flex flex-col items-center space-y-2">
+    <div className="flex flex-col items-center space-y-3">
       <input
         type="number"
         value={displayScore}
         onChange={handleInputChange}
         onBlur={handleInputBlur}
-        className="w-14 sm:w-16 h-7 sm:h-8 text-center border border-gray-300 rounded text-xs sm:text-sm font-mono touch-manipulation"
+        className="w-16 sm:w-20 h-8 sm:h-9 text-center border border-gray-300 rounded text-sm sm:text-base font-mono touch-manipulation focus:border-blue-500 focus:outline-none"
         min="70"
         max="180"
         step="0.1"
+        placeholder="110.0"
         style={{ fontSize: '16px' }} // Prevents zoom on iOS
         aria-label={`Score for ${teamName}`}
       />
@@ -51,12 +52,15 @@ const ScoreInput = ({ score, onScoreChange, teamName }) => {
         step="0.1"
         value={sliderScore}
         onChange={handleSliderChange}
-        className="w-20 sm:w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer touch-manipulation"
+        className="w-32 sm:w-40 h-3 sm:h-4 bg-gray-200 rounded-lg appearance-none cursor-pointer touch-manipulation"
         style={{
           background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((sliderScore - 70) / 110) * 100}%, #e5e7eb ${((sliderScore - 70) / 110) * 100}%, #e5e7eb 100%)`
         }}
         aria-label={`Score slider for ${teamName}`}
       />
+      <div className="text-xs text-gray-500 font-mono">
+        {sliderScore}
+      </div>
     </div>
   );
 };
