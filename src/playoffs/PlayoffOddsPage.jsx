@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { applyPicks, applyReadings, formatOdds, playoffOdds, projectedScores, tableAfterWeeks } from '../../lib/playoffs.mjs';
+import { applyPicks, applyReadings, formatOdds, playoffOdds, projectedScores, sortStandings, tableAfterWeeks } from '../../lib/playoffs.mjs';
 import { formatTime } from '../winprob/data';
 import { loadSeason, loadWeekReadings } from './data';
 import WhatIfMatchups from './WhatIfMatchups';
@@ -77,9 +77,8 @@ export default function PlayoffOddsPage() {
     return tableAfterWeeks(season.teams, played);
   }, [season, schedule, whatIfWeekNumber, deferredPicks, hasPicks]);
 
-  const rows = useMemo(() => (season ? table
-    .map((team) => ({ ...team, odds: odds[team.id], baseline: baseline[team.id] }))
-    .sort((a, b) => b.odds - a.odds || b.wins - a.wins || b.pointsFor - a.pointsFor) : []), [season, table, odds, baseline]);
+  const rows = useMemo(() => (season ? sortStandings(table)
+    .map((team) => ({ ...team, odds: odds[team.id], baseline: baseline[team.id] })) : []), [season, table, odds, baseline]);
 
   const names = useMemo(() => Object.fromEntries((season?.teams ?? []).map((team) => [team.id, team.name])), [season]);
 
