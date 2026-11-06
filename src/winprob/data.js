@@ -76,20 +76,8 @@ export function shortPlayerName(player) {
   return rest.length ? `${first[0]}. ${rest.join(' ')}` : null;
 }
 
-// Each pair passes the colorblind and contrast checks against the dark surface.
-const MATCHUP_COLORS = [
-  ['#3987e5', '#d95926'],
-  ['#199e70', '#c98500'],
-  ['#d55181', '#008300'],
-  ['#9085e9', '#e66767'],
-  ['#9085e9', '#c98500'],
-];
-
-// Matchup slot sets the colors, so a team keeps its color all week whatever the sort order.
-export function matchupColors(doc, pair) {
-  const slot = doc.matchups.findIndex((p) => matchupKey(p) === matchupKey(pair));
-  return MATCHUP_COLORS[Math.max(slot, 0) % MATCHUP_COLORS.length];
-}
+// A team's color follows its roster ID, which holds all season even if the team is renamed.
+export const teamColor = (id) => `var(--team-${((Number(id) - 1) % 10) + 1})`;
 
 // Most undecided first, judged at the latest update.
 export function closestFirst(doc) {

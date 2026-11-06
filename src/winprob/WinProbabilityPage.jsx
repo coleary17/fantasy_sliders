@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import HelpText from '../HelpText';
-import PageHeader from '../PageHeader';
 import { startPolling } from '../polling';
-import useIsPhone from '../useIsPhone';
 import MatchupRow from './MatchupRow';
 import { findEvents } from './events';
 import { findScores } from './scoring';
@@ -42,8 +40,7 @@ export default function WinProbabilityPage() {
   const [cursor, setCursor] = useState(null); // { t, source: matchup key, pinned }
   const [mode, setMode] = useState(savedMode);
   const [zoomed, setZoomed] = useState(false);
-  const isPhone = useIsPhone();
-  const fit = isPhone && !zoomed; // a phone starts on the whole week, and zooming in scrolls it
+  const fit = !zoomed; // charts start on the whole week, and zooming in scrolls them
   const scrollers = useRef(new Map());
   const stickToEnd = useRef(true);
   const ownScrolls = useRef(new WeakMap()); // where the page itself last moved each chart
@@ -189,8 +186,6 @@ export default function WinProbabilityPage() {
 
   return (
     <div className="min-h-screen bg-page pb-12">
-      <PageHeader view="Matchup win probability" />
-
       <main className="mx-auto max-w-7xl px-2 pb-4 sm:px-4 sm:pb-6">
         {error && !docMatches && (
           <p role="alert" className="mt-2 rounded-lg bg-surface p-4 text-ink-2 shadow">
@@ -210,7 +205,7 @@ export default function WinProbabilityPage() {
               value={activeKey}
               onChange={(event) => selectWeek(event.target.value)}
               aria-label="Week"
-              className="min-h-11 shrink-0 rounded-md bg-surface px-3 text-sm font-medium text-ink hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+              className="min-h-11 shrink-0 rounded-md bg-surface px-3 text-sm font-medium text-ink hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
             >
               {[...keys].reverse().map((key) => (
                 <option key={key} value={key}>Week {weekNumber(key)}</option>
@@ -253,7 +248,7 @@ export default function WinProbabilityPage() {
                     onClick={() => selectMode(value)}
                     aria-pressed={mode === value}
                     className={`min-h-11 rounded-md px-3 text-sm font-medium ${
-                      mode === value ? 'bg-ink text-page' : 'bg-surface text-ink-2 hover:bg-raised'
+                      mode === value ? 'bg-raised text-gold ring-1 ring-inset ring-gold' : 'bg-surface text-ink-2 hover:bg-raised'
                     }`}
                   >
                     {label}
@@ -304,7 +299,7 @@ export default function WinProbabilityPage() {
         {docMatches && (
           <p className="mt-4 text-xs text-ink-3">
             {mode === 'score' ? 'Each line is a team\'s score so far.' : 'A line above the midpoint favors the top team, and below it the bottom team.'} Scores and projections come
-            from Sleeper, and game clocks from ESPN. Charts only cover the time games are on, and dotted sections skip the gaps between them. White dots mark key moments. INT, FR, SAF and BLK mark defensive plays, PA marks a score that drops a defense to a lower points-allowed tier, and small ticks mark sacks.
+            from Sleeper, and game clocks from ESPN. Charts only cover the time games are on, and dotted sections skip the gaps between them. Pale dots mark key moments. INT, FR, SAF and BLK mark defensive plays, PA marks a score that drops a defense to a lower points-allowed tier, and small ticks mark sacks.
             Each estimate compares current points plus the unplayed share of each starter&apos;s projection.
           </p>
         )}

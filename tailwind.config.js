@@ -11,13 +11,28 @@ export default {
   theme: {
     extend: {
       colors: {
-        page: '#111110',
-        surface: '#1a1a19',
-        raised: '#262624',
-        line: '#34342f',
-        ink: '#f0efec',
-        'ink-2': '#c3c2b7',
-        'ink-3': '#9a9990',
+        page: 'var(--page)',
+        surface: 'var(--surface)',
+        raised: 'var(--raised)',
+        line: 'var(--line)',
+        ink: 'var(--ink)',
+        'ink-2': 'var(--ink-2)',
+        'ink-3': 'var(--ink-3)',
+        gold: 'var(--gold)',
+        'gold-soft': 'var(--gold-soft)',
+      },
+      fontFamily: {
+        sans: ['"Sofia Sans Semi Condensed"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Bevan', 'Georgia', 'serif'],
+      },
+      // Sofia Sans runs narrow, so the small sizes sit a step larger than Tailwind's defaults.
+      fontSize: {
+        xs: ['0.8125rem', '1.125rem'],
+        sm: ['0.9375rem', '1.3125rem'],
+      },
+      borderRadius: {
+        md: '0.1875rem',
+        lg: '0.25rem',
       },
     },
   },

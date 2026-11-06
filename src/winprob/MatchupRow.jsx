@@ -2,8 +2,8 @@ import { memo, useId, useRef, useState } from 'react';
 import useIsPhone from '../useIsPhone';
 import MatchupChart from './MatchupChart';
 import MatchupLineups from './MatchupLineups';
-import { formatPercent, formatTime, indexAtTime, matchupColors, scoreShare } from './data';
-import { keyMoments } from './scoring';
+import { formatPercent, formatTime, indexAtTime, scoreShare, teamColor } from './data';
+import { biggestMoments, keyMoments } from './scoring';
 
 const TABS = [['moments', 'Moments'], ['lineups', 'Lineups'], ['data', 'Data']];
 
@@ -18,7 +18,7 @@ function PanelTabs({ tab, onChange }) {
           role="tab"
           aria-selected={tab === value}
           onClick={() => onChange(value)}
-          className={`min-h-11 flex-1 rounded-md text-sm font-medium ${tab === value ? 'bg-ink text-page' : 'bg-raised text-ink-2'}`}
+          className={`min-h-11 flex-1 rounded-md text-sm font-medium ${tab === value ? 'bg-raised text-gold ring-1 ring-inset ring-gold' : 'bg-raised text-ink-2'}`}
         >
           {label}
         </button>
@@ -56,13 +56,36 @@ const MatchupTable = memo(function MatchupTable({ series, nameA, nameB, open }) 
 });
 
 function KeyMoments({ events, scores, series, nameA, nameB, colorA, colorB, activeTime, onSelect }) {
+  const [showAll, setShowAll] = useState(false);
   const moments = keyMoments(events, scores);
+  const biggest = biggestMoments(moments);
+  const canFilter = biggest.length < moments.length && biggest.length > 0;
+  const shown = canFilter && !showAll ? biggest : moments;
   return (
     <div className="mt-3 border-t border-line pt-3">
-      <h3 className="mb-1 text-sm font-medium text-ink-2">Key moments</h3>
+      <div className="mb-1 flex min-h-11 items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-ink-2">Key moments</h3>
+        {canFilter && (
+          <div className="flex shrink-0 gap-1" role="group" aria-label="Moments shown">
+            {[[false, `Biggest ${biggest.length}`], [true, `All ${moments.length}`]].map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setShowAll(value)}
+                aria-pressed={showAll === value}
+                className={`min-h-11 rounded-md px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold ${
+                  showAll === value ? 'bg-raised text-gold ring-1 ring-inset ring-gold' : 'bg-surface text-ink-2 hover:bg-raised'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {moments.length === 0 && <p className="pb-2 text-xs text-ink-3">No big swings or scores yet.</p>}
       <ul>
-        {moments.map((event) => {
+        {shown.map((event) => {
           const gainerName = event.gainer === 'a' ? nameA : nameB;
           const color = event.gainer === 'a' ? colorA : colorB;
           return (
@@ -71,7 +94,7 @@ function KeyMoments({ events, scores, series, nameA, nameB, colorA, colorB, acti
                 type="button"
                 onClick={() => onSelect(event)}
                 aria-pressed={activeTime === series[event.index].t}
-                className={`flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                className={`flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold ${
                   activeTime === series[event.index].t ? 'bg-raised' : ''
                 }`}
               >
@@ -133,7 +156,7 @@ function Sparkline({ mode, scoreMax, series, xs, width, colorA, colorB, shownInd
           <clipPath id={`${clipId}-a`}><rect x="-5" y="-5" width="110" height="55" /></clipPath>
           <clipPath id={`${clipId}-b`}><rect x="-5" y="50" width="110" height="55" /></clipPath>
         </defs>
-        {!scoreMode && <line x1="0" x2="100" y1="50" y2="50" stroke="#6f6e68" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+        {!scoreMode && <line x1="0" x2="100" y1="50" y2="50" stroke="var(--midline)" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
         {[['a', colorA], ['b', colorB]].map(([side, color]) => (scoreMode ? (
           <polyline
             key={side}
@@ -160,7 +183,7 @@ function Sparkline({ mode, scoreMax, series, xs, width, colorA, colorB, shownInd
           </g>
         )))}
         {showCursor && (
-          <line x1={xPercent(shownIndex)} x2={xPercent(shownIndex)} y1="0" y2="100" stroke="#9a9990" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          <line x1={xPercent(shownIndex)} x2={xPercent(shownIndex)} y1="0" y2="100" stroke="var(--ink-3)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
         )}
       </svg>
       {(scoreMode
@@ -189,8 +212,7 @@ function TeamSummary({ mode, name, team, probability, leading, color }) {
           <span className="hidden min-[360px]:inline"> · proj {team.expected.toFixed(1)}</span>
         </div>
       </div>
-      <div className={`shrink-0 text-base tabular-nums text-ink ${leading ? 'font-bold' : 'font-normal'}`}>
-        {leading && <span className="mr-0.5 text-[10px] align-middle" aria-hidden="true">▲</span>}
+      <div className={`shrink-0 font-display text-lg leading-tight tabular-nums ${leading ? 'text-ink' : 'text-ink-3'}`}>
         {scoreMode ? team.points.toFixed(1) : formatPercent(probability)}
       </div>
     </div>
@@ -207,7 +229,7 @@ export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, 
   const dimmed = cursor !== null && cursor.source !== matchKey;
   const focused = cursor !== null && cursor.source === matchKey;
   const panelId = `matchup-${a}-${b}`;
-  const [colorA, colorB] = matchupColors(doc, pair);
+  const [colorA, colorB] = pair.map(teamColor);
   const leader = mode === 'score' ? shown.a.points - shown.b.points : shown.probability - 0.5;
   const isPhone = useIsPhone();
   const [tab, setTab] = useState('moments');
@@ -233,7 +255,7 @@ export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, 
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={panelId}
-        className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4"
+        className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold sm:px-4"
       >
         <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
           <TeamSummary mode={mode} name={nameA} team={shown.a} probability={shown.probability} leading={leader > 0} color={colorA} />

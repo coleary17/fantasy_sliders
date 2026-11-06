@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { DEFAULT_MARGIN, formatOdds, lastPickedWeek, normalizeMargin, whatIfScores } from '../../lib/playoffs.mjs';
 import HelpText from '../HelpText';
+import { teamColor } from '../winprob/data';
 
 const SLIDER_MIN = 1;
 const SLIDER_MAX = 70;
@@ -19,8 +20,8 @@ function MarginInput({ margin, onChange, label }) {
               type="button"
               onClick={() => onChange(value)}
               aria-pressed={sliderValue === value}
-              className={`min-h-11 rounded-md border px-2.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
-                sliderValue === value ? 'border-blue-500 bg-raised text-ink' : 'border-line text-ink-2 hover:bg-raised'
+              className={`min-h-11 rounded-md border px-2.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold ${
+                sliderValue === value ? 'border-gold bg-raised text-ink' : 'border-line text-ink-2 hover:bg-raised'
               }`}
             >
               {name}
@@ -38,7 +39,7 @@ function MarginInput({ margin, onChange, label }) {
             min={SLIDER_MIN}
             max={SLIDER_MAX}
             step="0.1"
-            className="h-11 w-16 rounded border border-line bg-raised text-center font-mono text-ink focus:border-blue-500 focus:outline-none"
+            className="h-11 w-16 rounded border border-line bg-raised text-center tabular-nums text-ink focus:border-gold focus:outline-none"
             style={{ fontSize: '16px' }} // Prevents zoom on iOS
             aria-label={`Margin of victory for ${label}, in points`}
           />
@@ -60,16 +61,17 @@ function MarginInput({ margin, onChange, label }) {
   );
 }
 
-function TeamButton({ name, odds, picked, onClick }) {
+function TeamButton({ name, color, odds, picked, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={picked}
-      className={`min-h-11 min-w-0 flex-1 basis-0 rounded-md border px-1 py-2 text-center text-[13px] leading-snug focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:text-base ${
-        picked ? 'border-blue-500 bg-raised text-ink' : 'border-line text-ink-2 hover:bg-raised'
+      className={`min-h-11 min-w-0 flex-1 basis-0 rounded-md border px-1 py-2 text-center text-[13px] leading-snug focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold sm:text-base ${
+        picked ? 'border-gold bg-raised text-ink' : 'border-line text-ink-2 hover:bg-raised'
       }`}
     >
+      <span className="mx-auto mb-1 block h-1 w-6 rounded-full" style={{ background: color }} aria-hidden="true" />
       <span className="block font-medium [overflow-wrap:anywhere]">{name}</span>
       <span className="mt-0.5 block text-xs tabular-nums text-ink-3">{odds} to make it</span>
     </button>
@@ -96,12 +98,12 @@ function WeekPicker({ week, weeks, picksByWeek, lastPicked, onWeekChange }) {
             onClick={() => onWeekChange(option)}
             aria-current={option === week ? 'true' : undefined}
             aria-label={`Week ${option}${status}`}
-            className={`relative min-h-11 min-w-11 flex-1 rounded-md border text-sm tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
-              option === week ? 'border-blue-500 bg-raised font-semibold text-ink' : 'border-line text-ink-2 hover:bg-raised'
+            className={`relative min-h-11 min-w-11 flex-1 rounded-md border text-sm tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold ${
+              option === week ? 'border-gold bg-raised font-semibold text-ink' : 'border-line text-ink-2 hover:bg-raised'
             }`}
           >
             {option}
-            {count > 0 && <span aria-hidden="true" className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-blue-500" />}
+            {count > 0 && <span aria-hidden="true" className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-gold" />}
           </button>
         );
       })}
@@ -177,6 +179,7 @@ export default function WhatIfMatchups({ week, weeks, onWeekChange, pairs, names
                   <TeamButton
                     key={id}
                     name={names[id]}
+                    color={teamColor(id)}
                     odds={odds[id] === undefined ? '' : formatOdds(odds[id], final)}
                     picked={pick?.winner === id}
                     onClick={() => togglePick(key, id)}
@@ -213,7 +216,7 @@ export default function WhatIfMatchups({ week, weeks, onWeekChange, pairs, names
           <button
             type="button"
             onClick={() => stepTo(nextWeek)}
-            className="min-h-11 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+            className="min-h-11 rounded-md bg-gold px-4 text-sm font-semibold text-page hover:bg-gold-soft"
           >
             Next: Week {nextWeek}<span aria-hidden="true"> →</span>
           </button>

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findScores, formatStatLine, keyMoments, layoutScoreLabels, scoreLineAnchor, statsAt, thinMarks, LABEL_HEIGHT } from './scoring.js';
+import { biggestMoments, findScores, formatStatLine, keyMoments, layoutScoreLabels, scoreLineAnchor, statsAt, thinMarks, LABEL_HEIGHT } from './scoring.js';
 import { scoreAxisMax, scoreShare } from './data.js';
 
 const players = {
@@ -57,6 +57,19 @@ test('key moments keep swings no score explains, and carry a new favorite onto t
   const moments = keyMoments(events, scores);
   assert.deepEqual(moments.map((m) => m.key), ['s', 'swing-40']);
   assert.equal(moments[0].flipped, true);
+});
+
+test('the biggest moments keep game order and leave out plays that moved nothing', () => {
+  const moment = (key, from, to) => ({ key, from, to });
+  const moments = [
+    moment('small', 0.5, 0.52),
+    moment('big', 0.4, 0.8),
+    moment('nothing', 0.001, 0.002),
+    moment('fall', 0.8, 0.6),
+    moment('smallest', 0.6, 0.61),
+  ];
+  assert.deepEqual(biggestMoments(moments, 2).map((m) => m.key), ['big', 'fall']);
+  assert.deepEqual(biggestMoments(moments).map((m) => m.key), ['small', 'big', 'fall', 'smallest']);
 });
 
 test('labels stack when they would overlap and stay inside the plot', () => {

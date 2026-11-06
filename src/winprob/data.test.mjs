@@ -34,3 +34,10 @@ test('chart ticks land on the viewer\'s hour, even half an hour off UTC', () => 
   assert.deepEqual(inTimeZone('America/New_York', game).ticks, ['Sun 1:00 PM', 'Sun 2:00 PM', 'Sun 3:00 PM', 'Sun 4:00 PM']);
   assert.deepEqual(inTimeZone('Asia/Kolkata', game).ticks, ['Sun 11:30 PM', 'Mon 1:00 AM', 'Mon 2:00 AM'], 'midnight is too close to the first label to fit');
 });
+
+test('every team keeps its own color, whatever form its ID arrives in', async () => {
+  const { teamColor } = await import(DATA);
+  const colors = Array.from({ length: 10 }, (_, i) => teamColor(i + 1));
+  assert.equal(new Set(colors).size, 10);
+  assert.equal(teamColor('7'), teamColor(7), 'saved weeks key teams by string, Sleeper by number');
+});

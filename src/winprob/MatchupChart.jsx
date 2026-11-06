@@ -9,12 +9,12 @@ const RIGHT_PAD = 56;
 const LEFT_PAD = 12;
 const TOOLTIP_WIDTH = 216;
 const TOOLTIP_GAP = 10;
-const GRID = '#34342f';
-const MIDLINE = '#6f6e68';
-const SURFACE = '#1a1a19';
+const GRID = 'var(--line)';
+const MIDLINE = 'var(--midline)';
+const SURFACE = 'var(--surface)';
 const AREA_OPACITY = 0.2;
 const EVENT_SNAP_PX = 10;
-const INK = '#f0efec';
+const INK = 'var(--ink)';
 const SACK_TICK = 5;
 const END_LABEL_GAP = 14; // keeps the two final scores readable when they're close
 const MIN_TICK_GAP = 72;
@@ -105,6 +105,12 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
     const after = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
     setEdges((prev) => (prev.before === before && prev.after === after ? prev : { before, after }));
   }, []);
+
+  const scrollByPage = (direction) => {
+    const el = scroller.current;
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: calm ? 'auto' : 'smooth' });
+  };
 
   useEffect(() => {
     const el = scroller.current;
@@ -249,11 +255,22 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
         onClose={onClose}
       />
     )}
-    {/* Score lines can run anywhere in the plot, so their key sits above it. */}
-    {scoreMode && !isPhone && (
-      <div className="mb-1 flex flex-wrap gap-x-4 gap-y-0.5 pl-9 text-xs font-medium text-ink-2 sm:pl-11">
-        <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorA} />{nameA}</span>
-        <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorB} />{nameB}</span>
+    {/* The key sits above the plot, where event labels can't run into it. */}
+    {!isPhone && (
+      <div className="mb-1 flex min-h-11 items-center justify-between gap-4 pl-11">
+        <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 text-xs font-medium text-ink-2">
+          <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorA} />{!scoreMode && '↑ '}{nameA}</span>
+          <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorB} />{!scoreMode && '↓ '}{nameB}</span>
+        </div>
+        {canZoom && (
+          <button
+            type="button"
+            onClick={onToggleZoom}
+            className="min-h-11 shrink-0 rounded-md bg-raised px-3 text-sm font-medium text-ink-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
+          >
+            {fit ? 'Zoom in' : 'Fit week'}
+          </button>
+        )}
       </div>
     )}
     <div className="flex">
@@ -263,13 +280,13 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
         ))}
       </div>
       <div className="relative min-w-0 flex-1">
-        {!scoreMode && (
+        {!scoreMode && isPhone && (
           <>
-            <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(1) + 2 }}>
-              <ColorKey color={colorA} />↑{!isPhone && ` ${nameA}`}
+            <div className="pointer-events-none absolute left-2 z-10 rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(1) + 2 }}>
+              <ColorKey color={colorA} />↑
             </div>
-            <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(0) - 20 }}>
-              <ColorKey color={colorB} />↓{!isPhone && ` ${nameB}`}
+            <div className="pointer-events-none absolute left-2 z-10 rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(0) - 20 }}>
+              <ColorKey color={colorB} />↓
             </div>
           </>
         )}
@@ -297,8 +314,20 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
             ))}
           </div>
         )}
-        {edges.before && <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-5 bg-gradient-to-r from-surface" aria-hidden="true" />}
-        {edges.after && <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-gradient-to-l from-surface" aria-hidden="true" />}
+        {edges.before && <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-surface" aria-hidden="true" />}
+        {edges.after && <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-surface" aria-hidden="true" />}
+        {/* A mouse has no sideways swipe, so it gets buttons. */}
+        {!isPhone && [['before', -1, 'left-1', 'Show earlier in the week', '‹'], ['after', 1, 'right-1', 'Show later in the week', '›']].map(([edge, direction, side, label, glyph]) => edges[edge] && (
+          <button
+            key={edge}
+            type="button"
+            onClick={() => scrollByPage(direction)}
+            aria-label={label}
+            className={`absolute top-1/2 z-10 h-11 w-8 -translate-y-1/2 rounded-md border border-line bg-raised text-lg leading-none text-ink hover:border-gold focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold ${side}`}
+          >
+            <span aria-hidden="true">{glyph}</span>
+          </button>
+        ))}
         <div
           ref={attachScroller}
           onScroll={(event) => {
@@ -320,7 +349,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
               onPointerDown={handleMouse}
               onPointerUp={handleTap}
               onPointerLeave={handlePointerLeave}
-              className="block rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+              className="block rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
             >
               {[0, 1].map((p) => (
                 <line key={p} x1={0} x2="100%" y1={yFor(p)} y2={yFor(p)} stroke={GRID} />
@@ -331,7 +360,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
                 return (
                   <g key={tick.t}>
                     <line x1={x} x2={x} y1={yFor(0)} y2={yFor(0) + 4} stroke={MIDLINE} />
-                    <text x={x} y={HEIGHT - 6} fontSize="11" fill="#9a9990" textAnchor={x < 42 ? 'start' : 'middle'}>
+                    <text x={x} y={HEIGHT - 6} fontSize="11" fill="var(--ink-3)" textAnchor={x < 42 ? 'start' : 'middle'}>
                       {formatTime(tick.t)}
                     </text>
                   </g>
@@ -387,7 +416,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
                   <g key={label.key}>
                     <line x1={label.x} x2={label.x} y1={label.lineY} y2={stemEnd} stroke={color} strokeOpacity="0.8" />
                     <rect x={label.x - LABEL_WIDTH / 2} y={label.y} width={LABEL_WIDTH} height={LABEL_HEIGHT} rx="3" fill={SURFACE} stroke={color} strokeWidth={td ? 1.5 : 1} strokeDasharray={label.negative ? '2 2' : undefined} />
-                    <text x={label.x} y={label.y + LABEL_HEIGHT - 3.5} fontSize="10" fontWeight={td ? 700 : 500} fill={td ? INK : '#c4c3bc'} textAnchor="middle">{label.kind}</text>
+                    <text x={label.x} y={label.y + LABEL_HEIGHT - 3.5} fontSize="10" fontWeight={td ? 700 : 500} fill={td ? INK : 'var(--ink-2)'} textAnchor="middle">{label.kind}</text>
                   </g>
                 );
               })}
@@ -410,7 +439,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
               )}
               {hovered && (
                 <>
-                  <line x1={hovered.x} x2={hovered.x} y1={yFor(1)} y2={yFor(0)} stroke="#9a9990" />
+                  <line x1={hovered.x} x2={hovered.x} y1={yFor(1)} y2={yFor(0)} stroke="var(--ink-3)" />
                   {scoreMode ? (
                     <>
                       <circle cx={hovered.x} cy={hovered.aY} r="4" fill={colorA} stroke={SURFACE} strokeWidth="2" />

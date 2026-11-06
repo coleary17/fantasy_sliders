@@ -1,15 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { applyPicks, applyReadings, biggestMovers, formatOdds, lastPickedWeek, projectedScores, prunePicks, sortStandings, tableAfterWeeks } from '../../lib/playoffs.mjs';
-import PageHeader from '../PageHeader';
 import { startPolling } from '../polling';
-import { formatTime } from '../winprob/data';
+import { formatTime, teamColor } from '../winprob/data';
 import { loadSeason, loadWeekReadings } from './data';
 import { loadPicks, savePicks } from './picks';
 import useSimulatedOdds from './useSimulatedOdds';
 import WhatIfMatchups from './WhatIfMatchups';
 
 const REFRESH_MS = 60_000;
-const BAR_COLOR = '#3987e5';
 
 const recordText = ({ wins, losses, ties }) => (ties ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`);
 
@@ -34,7 +32,7 @@ function OddsBar({ rows, tableVisible, returning, onViewTable, onReturn }) {
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface px-3 py-1.5 shadow-lg max-sm:bottom-[calc(3.5rem+1px+env(safe-area-inset-bottom))] lg:hidden">
       <div className="mx-auto flex min-h-11 max-w-3xl items-center gap-3">
         {tableVisible ? (
-          <button type="button" onClick={onReturn} className="min-h-11 flex-1 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white">
+          <button type="button" onClick={onReturn} className="min-h-11 flex-1 rounded-md bg-gold px-3 text-sm font-semibold text-page">
             <span aria-hidden="true">↓ </span>Back to your picks
           </button>
         ) : (
@@ -181,8 +179,6 @@ export default function PlayoffOddsPage() {
 
   return (
     <div className={`min-h-screen bg-page pb-12 ${hasPicks ? 'max-lg:pb-24' : ''}`}>
-      <PageHeader view="Playoff odds" />
-
       <main className={`mx-auto px-2 py-4 sm:px-4 sm:py-6 ${showMatchups ? 'max-w-7xl' : 'max-w-3xl'}`}>
         {error && (
           <p role="alert" className="rounded-lg bg-surface p-4 text-ink-2 shadow">
@@ -208,6 +204,7 @@ export default function PlayoffOddsPage() {
                   <table className="w-full text-left text-sm">
                     <thead className="text-xs text-ink-3">
                       <tr>
+                        <th scope="col" className="w-7 py-2 pl-3 text-right font-medium"><span className="sr-only">Seed</span></th>
                         <th scope="col" className="px-3 py-2 font-medium">Team</th>
                         <th scope="col" className="px-2 py-2 text-right font-medium">Record</th>
                         <th scope="col" className="hidden px-2 py-2 text-right font-medium sm:table-cell">Points for</th>
@@ -216,9 +213,30 @@ export default function PlayoffOddsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((team) => (
-                        <tr key={team.id} className="border-t border-line">
-                          <td className="px-3 py-3 font-medium text-ink [overflow-wrap:anywhere]">{team.name}</td>
+                      {rows.map((team, index) => {
+                        const inPlayoffs = index < season.playoffSpots;
+                        const firstOut = index === season.playoffSpots;
+                        return (
+                        <Fragment key={team.id}>
+                        {firstOut && (
+                          <tr>
+                            <td colSpan={6} className="px-3 py-0.5">
+                              <div className="flex items-center gap-2 text-xs text-gold">
+                                <span className="flex-1 border-t border-dashed border-gold" aria-hidden="true" />
+                                Playoff line
+                                <span className="flex-1 border-t border-dashed border-gold" aria-hidden="true" />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        <tr className={firstOut ? '' : 'border-t border-line'}>
+                          <td className="py-3 pl-3 text-right tabular-nums text-ink-3">{index + 1}</td>
+                          <td className={`px-3 py-3 font-medium [overflow-wrap:anywhere] ${inPlayoffs ? 'text-ink' : 'text-ink-2'}`}>
+                            <span className="flex items-center gap-2">
+                              <span className="w-1 self-stretch rounded-full" style={{ background: teamColor(team.id) }} aria-hidden="true" />
+                              <span className="min-w-0">{team.name}</span>
+                            </span>
+                          </td>
                           <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums text-ink-2">{recordText(team)}</td>
                           <td className="hidden px-2 py-3 text-right tabular-nums text-ink-2 sm:table-cell">{team.pointsFor.toFixed(1)}</td>
                           <td className="whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums text-ink">
@@ -227,10 +245,10 @@ export default function PlayoffOddsPage() {
                           </td>
                           <td className="py-3 pr-3" aria-hidden="true">
                             <div className="relative h-2 rounded bg-raised">
-                              <div className="h-full rounded" style={{ width: `${team.odds * 100}%`, background: BAR_COLOR }} />
+                              <div className="h-full rounded" style={{ width: `${team.odds * 100}%`, background: inPlayoffs ? 'var(--ink-2)' : 'var(--ink-3)' }} />
                               {hasPicks && (
                                 <div
-                                  className="absolute -top-1 h-4 w-0.5 -translate-x-1/2 rounded bg-ink"
+                                  className="absolute -top-1 h-4 w-0.5 -translate-x-1/2 rounded bg-gold"
                                   style={{ left: `${team.baseline * 100}%` }}
                                   title="Odds before your picks"
                                 />
@@ -238,7 +256,9 @@ export default function PlayoffOddsPage() {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -261,7 +281,7 @@ export default function PlayoffOddsPage() {
                 </div>
               )}
             </div>
-              {hasPicks && <p className="mt-4 px-1 text-xs text-ink-3">With picks, every game through Week {lastPicked} counts as decided, and records and points for include them. Later weeks stay simulated from real scoring, so picks don&apos;t change how good a team looks. The white tick and arrows compare with the odds before your picks.</p>}
+              {hasPicks && <p className="mt-4 px-1 text-xs text-ink-3">With picks, every game through Week {lastPicked} counts as decided, and records and points for include them. Later weeks stay simulated from real scoring, so picks don&apos;t change how good a team looks. The tick and arrows compare with the odds before your picks.</p>}
               <p className="mt-4 max-w-3xl px-1 text-xs text-ink-3">
                 {seasonOver
                   ? 'The regular season is over, so these are the final places.'

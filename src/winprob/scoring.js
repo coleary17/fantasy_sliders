@@ -158,6 +158,15 @@ export function keyMoments(events, allScores) {
   return [...labeled, ...swings].sort((x, y) => x.index - y.index || (x.playT ?? x.t) - (y.playT ?? y.t));
 }
 
+// The swings that shaped a matchup, still in game order. A play that didn't move the displayed
+// odds never makes the cut, however few others there are.
+export function biggestMoments(moments, limit = 5) {
+  const swing = (m) => Math.abs(m.to - m.from);
+  const moved = moments.filter((m) => Math.round(m.from * 100) !== Math.round(m.to * 100));
+  const kept = new Set([...moved].sort((x, y) => swing(y) - swing(x)).slice(0, limit));
+  return moments.filter((m) => kept.has(m));
+}
+
 // On the win probability line, a label sits on the side of the team it helped.
 const probabilityAnchor = (score, point) => ({ side: score.gainer, lineY: point.y, above: score.gainer === 'a' });
 
