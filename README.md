@@ -8,7 +8,7 @@ Win probability graphs and playoff odds for our Sleeper league.
 Netlify Blobs. It runs every minute during the game windows in `lib/schedule.mjs`, and every
 5 minutes otherwise. Add each season's international and holiday dates there. Sleeper has no score history, so a graph only covers
 time after collection started. Scores and projections come from Sleeper, and game
-clocks and scoring plays from ESPN. Chart labels and box scores come from what the collector
+clocks, scoring plays and defensive plays from ESPN. Sleeper's stats trigger a read of a game when a starting defense makes a play that doesn't change the score, and settle which of those plays stand once the game ends. Chart labels and box scores come from what the collector
 saved, so a running `collect-local` needs a restart to pick up collector changes. The model is
 in `lib/model.mjs`.
 

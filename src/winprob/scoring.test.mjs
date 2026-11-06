@@ -93,5 +93,59 @@ test('stat lines read like a box score for each kind of player', () => {
   assert.equal(formatStatLine({ rec: 2, rec_tgt: 4, rec_yd: 61, rec_td: 1 }), '2/4 rec, 61 yd, 1 TD');
   assert.equal(formatStatLine({ fgm: 4, fga: 4, xpm: 3, xpa: 3 }), '4/4 FG, 3/3 XP');
   assert.equal(formatStatLine({ sack: 1, int: 2, pts_allow: 10 }), '1 sack, 2 INT, 10 pts allowed');
+  assert.equal(formatStatLine({ sack: 2, def_st_fum_rec: 1, safe: 1, blk_kick: 1, pts_allow: 7 }), '2 sacks, 1 FR, 1 safety, 1 blocked, 7 pts allowed');
   assert.equal(formatStatLine(null), null);
+});
+
+const defenseDoc = (defense, extra = {}) => ({
+  players: { ...players, BAL: { name: 'Baltimore Ravens', team: 'BAL', pos: 'DEF' } },
+  plays: { g: { plays: [], defense, ...extra.game } },
+  ...extra.doc,
+});
+const pick = { id: 'i', t: 150, kind: 'INT', team: 'BAL', victimTeam: 'JAX', defender: 'M.Brown', victim: 'T.Lawrence', period: 3, clock: '5:15' };
+const twoPoints = (a, b) => [point(100, 0.4, a, b), point(200, 0.6, a, b)];
+
+test('a turnover credits the defense, or else hurts the owner of the player who gave it up', () => {
+  const both = findScores(defenseDoc([pick]), twoPoints(team('BAL'), team('qb')));
+  assert.deepEqual(both.map((s) => [s.gainer, s.kind, s.title]), [['a', 'INT', 'BAL DEF: M. Brown INT off T. Lawrence']]);
+  const victimOnly = findScores(defenseDoc([pick]), twoPoints(team('rb'), team('qb')));
+  assert.deepEqual(victimOnly.map((s) => [s.gainer, s.title]), [['a', 'T. Lawrence throws INT']]);
+  const sameTeam = findScores(defenseDoc([pick]), twoPoints(team('BAL', 'qb'), team('rb')));
+  assert.deepEqual(sameTeam.map((s) => s.gainer).sort(), ['a', 'b']);
+  assert.deepEqual(findScores(defenseDoc([pick]), twoPoints(team('rb'), team('wr'))), []);
+});
+
+test('a pick returned for a touchdown leaves its label to the touchdown', () => {
+  assert.deepEqual(findScores(defenseDoc([{ ...pick, scored: true }]), twoPoints(team('BAL'), team('rb'))), []);
+});
+
+test('sacks are chart ticks, listed only when the odds move', () => {
+  const sack = { id: 's', t: 150, kind: 'SACK', team: 'BAL', victimTeam: 'JAX', defender: null, victim: 'T.Lawrence' };
+  const scores = findScores(defenseDoc([sack]), [point(100, 0.5, team('BAL'), team('rb')), point(200, 0.51, team('BAL'), team('rb'))]);
+  assert.equal(scores[0].minor, true);
+  assert.equal(keyMoments([], scores).length, 0);
+  assert.equal(keyMoments([], [{ ...scores[0], to: 0.6 }]).length, 1);
+});
+
+test('a final game keeps only as many plays as Sleeper counted, while a live game keeps them all', () => {
+  const two = [pick, { ...pick, id: 'j', t: 160 }];
+  const stats = { BAL: [[1, { int: 1 }]] };
+  const series = twoPoints(team('BAL'), team('rb'));
+  assert.equal(findScores(defenseDoc(two, { doc: { stats } }), series).length, 2);
+  const final = findScores(defenseDoc(two, { doc: { stats }, game: { final: true } }), series);
+  assert.deepEqual(final.map((s) => s.playT), [150]);
+});
+
+test('a score that costs a starting defense 2+ points is marked for the other team', () => {
+  const pa = (id, allowed) => ({ id, t: 150, kind: 'PA', team: 'BAL', allowed, period: 1, clock: '1:00' });
+  const ptsAllowScoring = { pts_allow_0: 10, pts_allow_1_6: 7, pts_allow_7_13: 4, pts_allow_14_20: 1, pts_allow_21_27: 0 };
+  const doc = defenseDoc([pa('x', 7), pa('y', 14), pa('z', 21)], { doc: { ptsAllowScoring } });
+  const scores = findScores(doc, twoPoints(team('rb'), team('BAL')));
+  assert.deepEqual(scores.map((s) => [s.gainer, s.kind, s.title]).slice(0, 2), [
+    ['a', 'PA', 'BAL DEF −6 pts: 7 allowed'],
+    ['a', 'PA', 'BAL DEF −3 pts: 14 allowed'],
+  ]);
+  assert.equal(scores.length, 2, 'a one-point drop is not marked');
+  assert.equal(scores[0].negative, true);
+  assert.deepEqual(findScores(defenseDoc([pa('x', 7)]), twoPoints(team('rb'), team('BAL'))), [], 'older weeks have no tier scoring');
 });

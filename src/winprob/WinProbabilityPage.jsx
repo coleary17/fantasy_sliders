@@ -239,7 +239,7 @@ export default function WinProbabilityPage() {
         {docMatches && (
           <p className="mt-4 text-xs text-ink-3">
             A line above the midpoint favors the top team, and below it the bottom team. Scores and projections come
-            from Sleeper, and game clocks from ESPN. Charts only cover the time games are on, and dotted sections skip the gaps between them. White dots mark key moments.
+            from Sleeper, and game clocks from ESPN. Charts only cover the time games are on, and dotted sections skip the gaps between them. White dots mark key moments. INT, FR, SAF and BLK mark defensive plays, PA marks a score that drops a defense to a lower points-allowed tier, and small ticks mark sacks.
             Each estimate compares current points plus the unplayed share of each starter&apos;s projection.
           </p>
         )}

@@ -15,6 +15,7 @@ const SURFACE = '#1a1a19';
 const AREA_OPACITY = 0.2;
 const EVENT_SNAP_PX = 10;
 const INK = '#f0efec';
+const SACK_TICK = 5;
 
 const yFor = (p) => TOP + (1 - p) * (HEIGHT - TOP - BOTTOM);
 
@@ -76,7 +77,8 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
   const hovered = shownIndex === null ? null : points[shownIndex];
   const hoveredEvent = hovered && events.find((e) => e.index === shownIndex);
   const hoveredScores = hovered ? scores.filter((s) => s.index === shownIndex) : [];
-  const labels = useMemo(() => layoutScoreLabels(scores, points, yFor(1), yFor(0)), [scores, points]);
+  const labels = useMemo(() => layoutScoreLabels(scores.filter((s) => !s.minor), points, yFor(1), yFor(0)), [scores, points]);
+  const ticksOnLine = scores.filter((s) => s.minor);
 
   const nearestIndex = (x) => {
     let best = 0;
@@ -231,6 +233,17 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
                   strokeWidth="2"
                 />
               ))}
+              {ticksOnLine.map((tick) => (
+                <line
+                  key={tick.key}
+                  x1={points[tick.index].x}
+                  x2={points[tick.index].x}
+                  y1={points[tick.index].y - SACK_TICK}
+                  y2={points[tick.index].y + SACK_TICK}
+                  stroke={tick.gainer === 'a' ? colorA : colorB}
+                  strokeWidth="1.5"
+                />
+              ))}
               {labels.map((label) => {
                 const color = label.gainer === 'a' ? colorA : colorB;
                 const td = label.kind === 'TD';
@@ -238,7 +251,7 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
                 return (
                   <g key={label.key}>
                     <line x1={label.x} x2={label.x} y1={label.lineY} y2={stemEnd} stroke={color} strokeOpacity="0.8" />
-                    <rect x={label.x - LABEL_WIDTH / 2} y={label.y} width={LABEL_WIDTH} height={LABEL_HEIGHT} rx="3" fill={SURFACE} stroke={color} strokeWidth={td ? 1.5 : 1} />
+                    <rect x={label.x - LABEL_WIDTH / 2} y={label.y} width={LABEL_WIDTH} height={LABEL_HEIGHT} rx="3" fill={SURFACE} stroke={color} strokeWidth={td ? 1.5 : 1} strokeDasharray={label.negative ? '2 2' : undefined} />
                     <text x={label.x} y={label.y + LABEL_HEIGHT - 3.5} fontSize="10" fontWeight={td ? 700 : 500} fill={td ? INK : '#c4c3bc'} textAnchor="middle">{label.kind}</text>
                   </g>
                 );
