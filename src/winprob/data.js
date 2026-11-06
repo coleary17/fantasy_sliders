@@ -93,7 +93,6 @@ export function closestFirst(doc) {
 const PX_PER_HOUR = 90;
 const BREAK_STEP_PX = 24; // the dotted jump between game windows
 const MAX_LIVE_GAP_MS = 30 * 60 * 1000; // live readings further apart than this aren't one window
-const TICK_EVERY_MS = 60 * 60 * 1000;
 const MIN_TICK_GAP_PX = 72;
 
 // True when two readings sit inside the same stretch of games.
@@ -129,7 +128,8 @@ export function layoutTimeline(allSnapshots) {
     if (!s.live) return;
     const prev = snapshots[i - 1];
     const windowStart = !prev || !inSameWindow(prev, s);
-    const hourChanged = prev && Math.floor(s.t / TICK_EVERY_MS) !== Math.floor(prev.t / TICK_EVERY_MS);
+    // In the viewer's own hours, since some time zones are offset by a half hour from UTC.
+    const hourChanged = prev && new Date(s.t).getHours() !== new Date(prev.t).getHours();
     if ((windowStart || hourChanged) && xs[i] - lastTickX >= MIN_TICK_GAP_PX) {
       ticks.push({ x: xs[i], t: s.t });
       lastTickX = xs[i];
