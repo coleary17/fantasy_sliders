@@ -26,5 +26,11 @@ dist-ssr
 # Snapshots collected on this machine
 public/data/wp
 
+# Stories generated on this machine. The catalog and finished stories are tracked so
+# Netlify builds (previews included) can ship them; prompts, replies and the rest stay local.
+public/data/story/*
+!public/data/story/catalog.json
+!public/data/story/*-????-r??.json
+
 # Netlify local state
 .netlify

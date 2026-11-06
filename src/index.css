@@ -17,16 +17,16 @@
   --gold-soft: #f0c965;
   /* One color per Sleeper roster ID. Any two teams can meet, so every pair was checked for
      normal vision and simulated color blindness, and gold is left to the interface. */
-  --team-1: #f42525; /* London's Calling */
-  --team-2: #e2e236; /* Garbage Time */
-  --team-3: #3492b2; /* The Substation */
-  --team-4: #63e963; /* New York Junts */
-  --team-5: #b6fbd9; /* Parsons Green Charms */
-  --team-6: #efa78f; /* Up the Bucking Broncos */
-  --team-7: #c4ceee; /* Connacht Cougars */
-  --team-8: #c025f4; /* King Henrys Royal Package */
-  --team-9: #bf86f9; /* BlackRockSeahawks */
-  --team-10: #cb4d4d; /* Reichless Behaviour */
+  --team-1: #ef4444; /* London's Calling - Red */
+  --team-2: #eab308; /* Garbage Time - Gold/Yellow */
+  --team-3: #06b6d4; /* The Substation - Cyan */
+  --team-4: #84cc16; /* New York Junts - Lime */
+  --team-5: #10b981; /* Parsons Green Charms - Emerald */
+  --team-6: #f97316; /* Up the Bucking Broncos - Orange */
+  --team-7: #4f46e5; /* Connacht Cougars - Royal Indigo */
+  --team-8: #d946ef; /* King Henrys Royal Package - Magenta */
+  --team-9: #8b5cf6; /* BlackRockSeahawks - Purple */
+  --team-10: #f43f5e; /* Reichless Behaviour - Rose */
 }
 
 body {

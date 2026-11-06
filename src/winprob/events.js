@@ -9,7 +9,7 @@ const MAX_GAP_MS = 30 * 60 * 1000; // over longer gaps, points can't be pinned t
 const FLIP_BONUS = 0.05;
 const MAX_EVENTS = 8;
 
-function bigPlays(doc, before, after) {
+export function bigPlays(doc, before, after) {
   return after.starters.flatMap((id, i) => {
     const earlier = before.starters.indexOf(id);
     if (earlier === -1) return [];

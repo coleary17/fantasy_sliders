@@ -1,0 +1,73 @@
+.story-track {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+
+.story-track::-webkit-scrollbar {
+  display: none;
+}
+
+.story-slide {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Everything on a card waits for the card to arrive, and plays again when you swipe back. */
+.story-rise {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.story-slide[data-active='true'] .story-rise {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: calc(var(--step, 0) * 110ms);
+}
+
+.story-bar {
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.story-slide[data-active='true'] .story-bar {
+  transform: scaleX(1);
+  transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: calc(var(--step, 0) * 110ms);
+}
+
+.story-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.story-slide[data-active='true'] .story-line {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1.6s ease-in-out 0.15s;
+}
+
+.story-dot {
+  opacity: 0;
+}
+
+.story-slide[data-active='true'] .story-dot {
+  opacity: 1;
+  transition: opacity 0.3s ease-out 1.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-rise,
+  .story-bar,
+  .story-line,
+  .story-dot,
+  .story-slide[data-active='true'] .story-rise,
+  .story-slide[data-active='true'] .story-bar,
+  .story-slide[data-active='true'] .story-line,
+  .story-slide[data-active='true'] .story-dot {
+    opacity: 1;
+    transform: none;
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+}

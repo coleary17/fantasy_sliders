@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import PlayoffOddsPage from './playoffs/PlayoffOddsPage';
+import StoryPage from './story/StoryPage';
 import WinProbabilityPage from './winprob/WinProbabilityPage';
 
 const VIEWS = [
   { hash: '#/win-probability', label: 'Win probability' },
   { hash: '#/playoff-odds', label: 'Playoff odds' },
+  // Stories ship as static files in the build for now (see scripts/prune-dist.mjs).
+  { hash: '#/story', label: 'Story' },
 ];
 
-const currentHash = () => (VIEWS.some((v) => v.hash === window.location.hash) ? window.location.hash : VIEWS[0].hash);
+const currentHash = () => {
+  const { hash } = window.location;
+  if ((hash === '#/story' || hash.startsWith('#/story/'))) return '#/story'; // a story's address also names the team and week
+  return VIEWS.some((v) => v.hash === hash) ? hash : VIEWS[0].hash;
+};
 
 function Seal() {
   return (
@@ -63,6 +70,7 @@ export default function Root() {
       </header>
       {hash === '#/playoff-odds' && <PlayoffOddsPage />}
       {hash === '#/win-probability' && <WinProbabilityPage />}
+      {hash === '#/story' && <StoryPage />}
     </>
   );
 }
