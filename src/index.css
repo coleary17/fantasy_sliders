@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: #111110;
+  color: #f0efec;
+}
+
 /* Slider styling */
 input[type="range"] {
   -webkit-appearance: none;

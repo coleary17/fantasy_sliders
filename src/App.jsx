@@ -53,7 +53,7 @@ function App() {
   };
 
   return (
-    <div className="bg-gray-50">
+    <div className="bg-page">
       <Header />
       
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-6 pb-20 sm:pb-12">

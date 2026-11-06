@@ -1,16 +1,29 @@
-# React + Vite
+# The New World Order
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Win probability graphs and a playoff simulator for our Sleeper league.
 
-Currently, two official plugins are available:
+## Win probability
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+`netlify/functions/collect.mjs` runs every 5 minutes on Netlify and saves a snapshot
+of each matchup to Netlify Blobs. Sleeper has no score history, so a graph only covers
+time after collection started. Scores and projections come from Sleeper, and game
+clocks from ESPN. The model is in `lib/model.mjs`.
 
-## React Compiler
+```bash
+npm test
+npm run collect    # save one snapshot to public/data/wp for local viewing
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Moving snapshots collected locally to Netlify
 
-## Expanding the ESLint configuration
+Once the site is deployed, upload the local file, then stop the local collector:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npx netlify-cli blobs:set win-probability 2026-w09 --input public/data/wp/2026-w09.json
+pkill -f collect-local
+```
+
+## Deployment
+
+Netlify builds from `netlify.toml` on each push to GitHub.

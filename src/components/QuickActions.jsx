@@ -3,8 +3,8 @@ const QuickActions = ({ onResetAll, onRandomScores, standings }) => {
   const bubbleTeams = standings.slice(4, 8); // Teams ranked 5-8
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+    <div className="bg-surface border border-line rounded-lg p-3 sm:p-4 shadow-sm">
+      <h3 className="text-base sm:text-lg font-semibold text-ink mb-3 sm:mb-4">
         Quick Actions
       </h3>
       
@@ -25,10 +25,10 @@ const QuickActions = ({ onResetAll, onRandomScores, standings }) => {
 
       <div className="space-y-3">
         <div>
-          <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-1">
+          <h4 className="text-xs sm:text-sm font-medium text-ink mb-1">
             Teams in Playoff Spots:
           </h4>
-          <div className="text-xs sm:text-sm text-gray-700 flex flex-wrap gap-1 leading-relaxed">
+          <div className="text-xs sm:text-sm text-ink-2 flex flex-wrap gap-1 leading-relaxed">
             {playoffTeams.map((team, index) => (
               <span key={team.name} className="break-words">
                 {team.name}
@@ -39,12 +39,12 @@ const QuickActions = ({ onResetAll, onRandomScores, standings }) => {
         </div>
 
         <div>
-          <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-1">
+          <h4 className="text-xs sm:text-sm font-medium text-ink mb-1">
             Teams on the Bubble (Ranks 5-8):
           </h4>
-          <div className="text-xs sm:text-sm text-gray-700 flex flex-wrap gap-1 leading-relaxed">
+          <div className="text-xs sm:text-sm text-ink-2 flex flex-wrap gap-1 leading-relaxed">
             {bubbleTeams.map((team, index) => (
-              <span key={team.name} className={`break-words ${team.inPlayoffs ? 'text-green-600' : 'text-red-600'}`}>
+              <span key={team.name} className={`break-words ${team.inPlayoffs ? 'text-green-400' : 'text-red-400'}`}>
                 {team.rank}. {team.name}
                 {index < bubbleTeams.length - 1 && ', '}
               </span>

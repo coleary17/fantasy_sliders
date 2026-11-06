@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test lib/*.test.mjs",
+    "collect": "node scripts/collect-local.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "^11.1.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

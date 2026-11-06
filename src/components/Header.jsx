@@ -1,6 +1,6 @@
 const Header = () => {
   return (
-    <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 shadow-lg">
+    <div className="bg-gradient-to-r from-blue-800 to-purple-800 text-white p-6 shadow-lg">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl md:text-4xl font-bold mb-2">
           The New World Order

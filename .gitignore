@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Snapshots collected on this machine
+public/data/wp
+
+# Netlify local state
+.netlify
