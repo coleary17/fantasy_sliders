@@ -119,7 +119,7 @@ function KeyMoments({ events, scores, series, nameA, nameB, colorA, colorB, acti
 
 // Fits the whole week into the row. The text beside it carries the exact values.
 function Sparkline({ mode, scoreMax, series, xs, width, colorA, colorB, shownIndex, showCursor, onScrub, onScrubEnd }) {
-  const clipId = useId();
+  const clipId = useId().replace(/:/g, '');
   const xPercent = (i) => (width > 0 ? (xs[i] / width) * 100 : 100);
   const yPercent = (p) => (1 - p) * 100;
   const points = series.map((s, i) => `${xPercent(i)},${yPercent(s.probability)}`).join(' ');
@@ -156,7 +156,7 @@ function Sparkline({ mode, scoreMax, series, xs, width, colorA, colorB, shownInd
           <clipPath id={`${clipId}-a`}><rect x="-5" y="-5" width="110" height="55" /></clipPath>
           <clipPath id={`${clipId}-b`}><rect x="-5" y="50" width="110" height="55" /></clipPath>
         </defs>
-        {!scoreMode && <line x1="0" x2="100" y1="50" y2="50" stroke="var(--midline)" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+        {!scoreMode && <line x1="0" x2="100" y1="50" y2="50" stroke="var(--midline)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />}
         {[['a', colorA], ['b', colorB]].map(([side, color]) => (scoreMode ? (
           <polyline
             key={side}
@@ -170,12 +170,12 @@ function Sparkline({ mode, scoreMax, series, xs, width, colorA, colorB, shownInd
           />
         ) : (
           <g key={side} clipPath={`url(#${clipId}-${side})`}>
-            <polygon points={area} fill={color} fillOpacity="0.2" />
+            <polygon points={area} fill={color} fillOpacity="0.35" />
             <polyline
               points={points}
               fill="none"
               stroke={color}
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeLinejoin="round"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"

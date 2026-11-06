@@ -12,7 +12,7 @@ const TOOLTIP_GAP = 10;
 const GRID = 'var(--line)';
 const MIDLINE = 'var(--midline)';
 const SURFACE = 'var(--surface)';
-const AREA_OPACITY = 0.2;
+const AREA_OPACITY = 0.35;
 const EVENT_SNAP_PX = 10;
 const INK = 'var(--ink)';
 const SACK_TICK = 5;
@@ -92,7 +92,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
   const [visibleWidth, setVisibleWidth] = useState(0);
   const [edges, setEdges] = useState({ before: false, after: false });
   const scroller = useRef(null);
-  const clipId = useId();
+  const clipId = useId().replace(/:/g, '');
 
   const attachScroller = useCallback((el) => {
     scroller.current = el;
@@ -354,7 +354,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
               {[0, 1].map((p) => (
                 <line key={p} x1={0} x2="100%" y1={yFor(p)} y2={yFor(p)} stroke={GRID} />
               ))}
-              <line x1={0} x2="100%" y1={yFor(0.5)} y2={yFor(0.5)} stroke={scoreMode ? GRID : MIDLINE} />
+              <line x1={0} x2="100%" y1={yFor(0.5)} y2={yFor(0.5)} stroke={scoreMode ? GRID : MIDLINE} strokeWidth={scoreMode ? 1 : 1.5} />
               {shownTicks.map((tick) => {
                 const { x } = tick;
                 return (
@@ -372,14 +372,14 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
               </defs>
               {[['a', colorA], ['b', colorB]].map(([side, color]) => (scoreMode ? (
                 <g key={side}>
-                  <path d={scoreLines[side].breaks} fill="none" stroke={color} strokeOpacity="0.7" strokeWidth="2" strokeDasharray="2 4" strokeLinecap="round" />
-                  <path d={scoreLines[side].solid} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                  <path d={scoreLines[side].breaks} fill="none" stroke={color} strokeOpacity="0.85" strokeWidth="2.5" strokeDasharray="2 4" strokeLinecap="round" />
+                  <path d={scoreLines[side].solid} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
                 </g>
               ) : (
                 <g key={side} clipPath={`url(#${clipId}-${side})`}>
                   <path d={area} fill={color} fillOpacity={AREA_OPACITY} />
-                  <path d={breaks} fill="none" stroke={color} strokeOpacity="0.7" strokeWidth="2" strokeDasharray="2 4" strokeLinecap="round" />
-                  <path d={solid} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                  <path d={breaks} fill="none" stroke={color} strokeOpacity="0.85" strokeWidth="2.5" strokeDasharray="2 4" strokeLinecap="round" />
+                  <path d={solid} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
                 </g>
               )))}
               {shownEvents.map((event) => (
@@ -387,8 +387,8 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
                   key={event.t}
                   cx={points[event.index].x}
                   cy={yOn(points[event.index], event.gainer)}
-                  r={event.flipped ? 5 : 4}
-                  fill={INK}
+                  r={event.flipped ? 5.5 : 4}
+                  fill="#ffffff"
                   stroke={SURFACE}
                   strokeWidth="2"
                 />

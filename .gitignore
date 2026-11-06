@@ -26,5 +26,8 @@ dist-ssr
 # Snapshots collected on this machine
 public/data/wp
 
+# Stories generated on this machine
+public/data/story
+
 # Netlify local state
 .netlify

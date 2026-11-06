@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import HelpText from '../HelpText';
 import { startPolling } from '../polling';
+import useIsPhone from '../useIsPhone';
 import MatchupRow from './MatchupRow';
 import { findEvents } from './events';
 import { findScores } from './scoring';
@@ -40,7 +41,8 @@ export default function WinProbabilityPage() {
   const [cursor, setCursor] = useState(null); // { t, source: matchup key, pinned }
   const [mode, setMode] = useState(savedMode);
   const [zoomed, setZoomed] = useState(false);
-  const fit = !zoomed; // charts start on the whole week, and zooming in scrolls them
+  const isPhone = useIsPhone();
+  const fit = isPhone ? !zoomed : zoomed; // phones start fitted to the whole week; desktop starts uncompressed with zoom-out available
   const scrollers = useRef(new Map());
   const stickToEnd = useRef(true);
   const ownScrolls = useRef(new WeakMap()); // where the page itself last moved each chart

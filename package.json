@@ -5,14 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && rm -rf dist/data",
+    "build": "vite build && node scripts/prune-dist.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test lib/*.test.mjs src/winprob/*.test.mjs",
+    "test": "node --test lib/*.test.mjs lib/story/*.test.mjs src/story/*.test.mjs src/winprob/*.test.mjs",
     "collect": "node scripts/collect-local.mjs",
-    "backfill": "node scripts/backfill-week.mjs"
+    "backfill": "node scripts/backfill-week.mjs",
+    "story": "node --env-file-if-exists=.env.local scripts/generate-story.mjs",
+    "story:index": "node scripts/index-stories.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
     "@netlify/blobs": "^11.1.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
