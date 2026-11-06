@@ -1,9 +1,10 @@
-import { useId } from 'react';
+import { memo, useId } from 'react';
 import MatchupChart from './MatchupChart';
 import MatchupLineups from './MatchupLineups';
-import { formatPercent, formatTime, matchupColors } from './data';
+import { formatPercent, formatTime, indexAtTime, matchupColors } from './data';
+import { keyMoments } from './scoring';
 
-function MatchupTable({ series, nameA, nameB }) {
+const MatchupTable = memo(function MatchupTable({ series, nameA, nameB }) {
   return (
     <details className="text-sm">
       <summary className="cursor-pointer py-3 text-ink-2">Show data table</summary>
@@ -29,19 +30,78 @@ function MatchupTable({ series, nameA, nameB }) {
       </div>
     </details>
   );
+});
+
+function KeyMoments({ events, scores, series, nameA, nameB, colorA, colorB, activeTime, onSelect }) {
+  const moments = keyMoments(events, scores);
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <h3 className="mb-1 text-sm font-medium text-ink-2">Key moments</h3>
+      {moments.length === 0 && <p className="pb-2 text-xs text-ink-3">No big swings or scores yet.</p>}
+      <ul>
+        {moments.map((event) => {
+          const gainerName = event.gainer === 'a' ? nameA : nameB;
+          const color = event.gainer === 'a' ? colorA : colorB;
+          return (
+            <li key={event.key}>
+              <button
+                type="button"
+                onClick={() => onSelect(event)}
+                aria-pressed={activeTime === series[event.index].t}
+                className={`flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                  activeTime === series[event.index].t ? 'bg-raised' : ''
+                }`}
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm text-ink [overflow-wrap:anywhere]">{event.title}</span>
+                  <span className="block text-xs text-ink-3">
+                    {formatTime(event.playT ?? event.t)}{event.gameClock && ` · ${event.gameClock}`} · {event.flipped ? `${gainerName} now favored` : gainerName}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-ink-2">
+                  {formatPercent(event.from)} → <strong className="text-ink">{formatPercent(event.to)}</strong>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 // Fits the whole week into the row. The text beside it carries the exact values.
-function Sparkline({ series, xs, width, colorA, colorB }) {
+function Sparkline({ series, xs, width, colorA, colorB, shownIndex, showCursor, onScrub, onScrubEnd }) {
   const clipId = useId();
   const xPercent = (i) => (width > 0 ? (xs[i] / width) * 100 : 100);
   const yPercent = (p) => (1 - p) * 100;
   const points = series.map((s, i) => `${xPercent(i)},${yPercent(s.probability)}`).join(' ');
   const area = series.length > 1 ? `${xPercent(0)},50 ${points} ${xPercent(series.length - 1)},50` : '';
-  const last = series.at(-1);
+  const shown = series[shownIndex];
+
+  // Mouse only: on a touch screen, a tap on the row opens it.
+  const handleMove = (event) => {
+    if (event.pointerType !== 'mouse') return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = ((event.clientX - rect.left) / rect.width) * width;
+    let best = 0;
+    series.forEach((_, i) => {
+      if (Math.abs(xs[i] - target) < Math.abs(xs[best] - target)) best = i;
+    });
+    onScrub(series[best].t);
+  };
+  const handleLeave = (event) => {
+    if (event.pointerType === 'mouse') onScrubEnd();
+  };
 
   return (
-    <div className="relative my-2 mr-1 h-11 w-14 shrink-0 min-[360px]:w-20 sm:w-auto sm:flex-1" aria-hidden="true">
+    <div
+      className="relative my-2 mr-1 h-11 w-14 shrink-0 min-[360px]:w-20 sm:w-auto sm:flex-1"
+      aria-hidden="true"
+      onPointerMove={handleMove}
+      onPointerLeave={handleLeave}
+    >
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full overflow-visible">
         <defs>
           <clipPath id={`${clipId}-a`}><rect x="-5" y="-5" width="110" height="55" /></clipPath>
@@ -62,13 +122,16 @@ function Sparkline({ series, xs, width, colorA, colorB }) {
             />
           </g>
         ))}
+        {showCursor && (
+          <line x1={xPercent(shownIndex)} x2={xPercent(shownIndex)} y1="0" y2="100" stroke="#9a9990" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        )}
       </svg>
       <span
         className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-surface"
         style={{
-          left: `${xPercent(series.length - 1)}%`,
-          top: `${yPercent(last.probability)}%`,
-          background: last.probability >= 0.5 ? colorA : colorB,
+          left: `${xPercent(shownIndex)}%`,
+          top: `${yPercent(shown.probability)}%`,
+          background: shown.probability >= 0.5 ? colorA : colorB,
         }}
       />
     </div>
@@ -94,16 +157,22 @@ function TeamSummary({ name, team, probability, leading, color }) {
   );
 }
 
-export default function MatchupRow({ doc, pair, series, timeline, expanded, onToggle, onScroll, scrollRef }) {
+export default function MatchupRow({ doc, pair, series, events, scores, timeline, expanded, cursor, matchKey, onCursor, onCursorEnd, onSelectEvent, onToggle, onScroll, scrollRef }) {
   const [a, b] = pair;
   const nameA = doc.teams[a];
   const nameB = doc.teams[b];
-  const latest = series.at(-1);
+  const cursorTime = cursor?.t ?? null;
+  const shownIndex = indexAtTime(series, cursorTime);
+  const shown = series[shownIndex];
+  const dimmed = cursor !== null && cursor.source !== matchKey;
+  const focused = cursor !== null && cursor.source === matchKey;
   const panelId = `matchup-${a}-${b}`;
   const [colorA, colorB] = matchupColors(doc, pair);
 
   return (
-    <section className="rounded-lg bg-surface shadow" aria-label={`${nameA} vs ${nameB}`}>
+    <section
+      className={`rounded-lg bg-surface shadow transition-opacity duration-150 ${dimmed ? 'opacity-50' : ''} ${focused ? 'ring-1 ring-ink-3' : ''}`}
+      aria-label={`${nameA} vs ${nameB}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -112,10 +181,20 @@ export default function MatchupRow({ doc, pair, series, timeline, expanded, onTo
         className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4"
       >
         <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
-          <TeamSummary name={nameA} team={latest.a} probability={latest.probability} leading={latest.probability > 0.5} color={colorA} />
-          <TeamSummary name={nameB} team={latest.b} probability={1 - latest.probability} leading={latest.probability < 0.5} color={colorB} />
+          <TeamSummary name={nameA} team={shown.a} probability={shown.probability} leading={shown.probability > 0.5} color={colorA} />
+          <TeamSummary name={nameB} team={shown.b} probability={1 - shown.probability} leading={shown.probability < 0.5} color={colorB} />
         </div>
-        <Sparkline series={series} xs={timeline.xs} width={timeline.width} colorA={colorA} colorB={colorB} />
+        <Sparkline
+          series={series}
+          xs={timeline.xs}
+          width={timeline.width}
+          colorA={colorA}
+          colorB={colorB}
+          shownIndex={shownIndex}
+          showCursor={cursor !== null}
+          onScrub={onCursor}
+          onScrubEnd={onCursorEnd}
+        />
         <span className={`shrink-0 text-xs text-ink-3 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true">▼</span>
       </button>
       <div id={panelId} hidden={!expanded} className="border-t border-line px-3 pt-3 sm:px-4">
@@ -132,8 +211,25 @@ export default function MatchupRow({ doc, pair, series, timeline, expanded, onTo
               colorB={colorB}
               onScroll={onScroll}
               scrollRef={scrollRef}
+              events={events}
+              scores={scores}
+              shownIndex={cursor === null ? null : shownIndex}
+              showTooltip={focused && !cursor.pinned}
+              onCursor={onCursor}
+              onCursorEnd={onCursorEnd}
             />
-            <MatchupLineups doc={doc} pair={pair} />
+            <KeyMoments
+              events={events}
+              scores={scores}
+              series={series}
+              nameA={nameA}
+              nameB={nameB}
+              colorA={colorA}
+              colorB={colorB}
+              activeTime={cursorTime}
+              onSelect={onSelectEvent}
+            />
+            <MatchupLineups doc={doc} pair={pair} atTime={cursorTime} />
             <MatchupTable series={series} nameA={nameA} nameB={nameB} />
           </>
         )}

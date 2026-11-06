@@ -26,7 +26,7 @@ export async function loadWeek(key) {
 
 // One point per snapshot for a matchup. Probability is always for team A.
 export function matchupSeries(doc, [a, b]) {
-  return doc.snapshots
+  return gameWindowSnapshots(doc.snapshots)
     .filter((s) => s.teams[a] && s.teams[b])
     .map((s) => ({
       t: s.t,
@@ -38,6 +38,22 @@ export function matchupSeries(doc, [a, b]) {
 }
 
 export const matchupKey = (pair) => pair.join('-');
+
+// The latest reading at or before a time. With no time, the latest reading overall.
+export function indexAtTime(series, t) {
+  if (t === null || t === undefined) return series.length - 1;
+  let found = 0;
+  series.forEach((s, i) => {
+    if (s.t <= t) found = i;
+  });
+  return found;
+}
+
+export function shortPlayerName(player) {
+  if (player.pos === 'DEF' || !player.name) return null;
+  const [first, ...rest] = player.name.split(' ');
+  return rest.length ? `${first[0]}. ${rest.join(' ')}` : null;
+}
 
 // Each pair passes the colorblind and contrast checks against the dark surface.
 const MATCHUP_COLORS = [
@@ -63,21 +79,34 @@ export function closestFirst(doc) {
 }
 
 const PX_PER_HOUR = 90;
-const IDLE_STEP_PX = 3; // between snapshots when no games are on
-const BREAK_STEP_PX = 24; // where a game window starts or ends
+const BREAK_STEP_PX = 24; // the dotted jump between game windows
+const MAX_LIVE_GAP_MS = 30 * 60 * 1000; // live readings further apart than this aren't one window
 const TICK_EVERY_MS = 60 * 60 * 1000;
 const MIN_TICK_GAP_PX = 72;
 
-// Time runs at a constant rate during games. Hours or days with no games
-// collapse, so a Thursday-to-Monday week doesn't scroll through empty space.
-export function layoutTimeline(snapshots) {
+// True when two readings sit inside the same stretch of games.
+export const inSameWindow = (prev, s) => prev.live && s.live && s.t - prev.t <= MAX_LIVE_GAP_MS;
+
+// The chart only covers time when games are on. Between windows it keeps the reading
+// where one ended and the one just before the next began, so a line change still shows.
+// Before the first game of the week, only the latest reading matters.
+export function gameWindowSnapshots(snapshots) {
+  const firstLive = snapshots.findIndex((s) => s.live);
+  return snapshots.filter((s, i) => {
+    if (s.live || i === snapshots.length - 1) return true;
+    if (firstLive === -1 || i < firstLive) return i === firstLive - 1;
+    return snapshots[i - 1].live || snapshots[i + 1].live;
+  });
+}
+
+// Time runs at a constant rate during games, and everything else is one short jump.
+export function layoutTimeline(allSnapshots) {
+  const snapshots = gameWindowSnapshots(allSnapshots);
   let x = 0;
   const xs = snapshots.map((s, i) => {
     if (i > 0) {
       const prev = snapshots[i - 1];
-      if (s.live && prev.live) x += ((s.t - prev.t) / 3_600_000) * PX_PER_HOUR;
-      else if (s.live || prev.live) x += BREAK_STEP_PX;
-      else x += IDLE_STEP_PX;
+      x += inSameWindow(prev, s) ? ((s.t - prev.t) / 3_600_000) * PX_PER_HOUR : BREAK_STEP_PX;
     }
     return x;
   });
@@ -85,14 +114,16 @@ export function layoutTimeline(snapshots) {
   const ticks = [];
   let lastTickX = -Infinity;
   snapshots.forEach((s, i) => {
+    if (!s.live) return;
     const prev = snapshots[i - 1];
-    const windowStart = s.live && !prev?.live;
+    const windowStart = !prev || !inSameWindow(prev, s);
     const hourChanged = prev && Math.floor(s.t / TICK_EVERY_MS) !== Math.floor(prev.t / TICK_EVERY_MS);
-    if ((i === 0 || windowStart || (s.live && hourChanged)) && xs[i] - lastTickX >= MIN_TICK_GAP_PX) {
+    if ((windowStart || hourChanged) && xs[i] - lastTickX >= MIN_TICK_GAP_PX) {
       ticks.push({ x: xs[i], t: s.t });
       lastTickX = xs[i];
     }
   });
+  if (ticks.length === 0 && snapshots.length > 0) ticks.push({ x: 0, t: snapshots[0].t });
   return { xs, ticks, width: x };
 }
 

@@ -4,7 +4,7 @@ const KEY_PATTERN = /^\d{4}-w\d{2}$/;
 
 // GET /api/wp lists the recorded weeks; GET /api/wp?key=2026-w09 returns one week.
 export default async (request) => {
-  const blobs = getStore('win-probability');
+  const blobs = getStore({ name: 'win-probability', consistency: 'strong' });
   const key = new URL(request.url).searchParams.get('key');
   if (key === null) {
     const { blobs: items } = await blobs.list();

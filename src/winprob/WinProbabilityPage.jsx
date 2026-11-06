@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import MatchupRow from './MatchupRow';
+import { findEvents } from './events';
+import { findScores } from './scoring';
 import { closestFirst, formatTime, layoutTimeline, loadWeek, loadWeekKeys, matchupKey, matchupSeries } from './data';
 
 const REFRESH_MS = 60_000;
@@ -13,9 +15,10 @@ export default function WinProbabilityPage() {
   const [error, setError] = useState(null);
   const [order, setOrder] = useState({ week: null, keys: [] });
   const [expanded, setExpanded] = useState(() => new Set());
+  const [cursor, setCursor] = useState(null); // { t, source: matchup key, pinned }
   const scrollers = useRef(new Map());
   const stickToEnd = useRef(true);
-  const syncing = useRef(false);
+  const ownScrolls = useRef(new WeakMap()); // where the page itself last moved each chart
   const sharedScrollLeft = useRef(0);
 
   const activeKey = selected ?? keys?.at(-1) ?? null;
@@ -50,33 +53,74 @@ export default function WinProbabilityPage() {
   }, [selected]);
 
   const timeline = useMemo(() => (doc ? layoutTimeline(doc.snapshots) : null), [doc]);
+  const matchups = useMemo(() => new Map((doc?.matchups ?? []).map((pair) => {
+    const series = matchupSeries(doc, pair);
+    return [matchupKey(pair), { series, events: findEvents(doc, series), scores: findScores(doc, series) }];
+  })), [doc]);
+
+  // Moves a chart and remembers where to, so its scroll event isn't mistaken for the reader's.
+  const scrollChart = useCallback((el, left) => {
+    if (Math.abs(el.scrollLeft - left) < 1) return;
+    el.scrollLeft = left;
+    ownScrolls.current.set(el, el.scrollLeft);
+  }, []);
+
+  const moveCursor = useCallback((source, t) => {
+    setCursor((prev) => (prev?.t === t && prev.source === source && !prev.pinned ? prev : { t, source, pinned: false }));
+  }, []);
+  const endCursor = useCallback((source) => {
+    setCursor((prev) => (prev?.source === source ? null : prev));
+  }, []);
 
   // All charts in a week share a time axis, so they scroll together.
   const handleScroll = useCallback((event) => {
-    if (syncing.current) return;
     const source = event.currentTarget;
+    const own = ownScrolls.current.get(source);
+    ownScrolls.current.delete(source);
+    if (own !== undefined && Math.abs(source.scrollLeft - own) < 1) return;
+    setCursor(null); // a cursor left behind would point at the wrong moment
     stickToEnd.current = source.scrollLeft + source.clientWidth >= source.scrollWidth - 4;
     sharedScrollLeft.current = source.scrollLeft;
-    syncing.current = true;
     scrollers.current.forEach((el) => {
-      if (el !== source) el.scrollLeft = source.scrollLeft;
+      if (el !== source) scrollChart(el, source.scrollLeft);
     });
-    requestAnimationFrame(() => {
-      syncing.current = false;
-    });
-  }, []);
+  }, [scrollChart]);
 
   // Open on the latest update, and keep following it unless the reader has scrolled back.
   // A newly expanded chart joins the others at the same point in time.
   useLayoutEffect(() => {
     scrollers.current.forEach((el) => {
-      el.scrollLeft = stickToEnd.current ? el.scrollWidth : sharedScrollLeft.current;
+      scrollChart(el, stickToEnd.current ? el.scrollWidth - el.clientWidth : sharedScrollLeft.current);
     });
-  }, [doc, expanded]);
+  }, [doc, expanded, scrollChart]);
+
+  // A tap anywhere else lets go of the selected moment. A finger that scrolls never gets here,
+  // because the browser cancels the touch instead of ending it.
+  useEffect(() => {
+    if (cursor === null) return undefined;
+    const handleTap = (event) => {
+      if (event.pointerType === 'mouse') return;
+      if (event.target.closest?.('svg[role="img"], button, a, summary, select, input')) return;
+      setCursor(null);
+    };
+    document.addEventListener('pointerup', handleTap);
+    return () => document.removeEventListener('pointerup', handleTap);
+  }, [cursor]);
+
+  // Brings a key moment to the middle of every open chart.
+  const jumpToEvent = (source, event) => {
+    setCursor({ t: event.t, source, pinned: true });
+    stickToEnd.current = false;
+    scrollers.current.forEach((el) => {
+      scrollChart(el, Math.max(0, timeline.xs[event.index] - el.clientWidth / 2));
+      sharedScrollLeft.current = el.scrollLeft;
+    });
+  };
 
   const selectWeek = (key) => {
     stickToEnd.current = true;
     setDoc(null);
+    setCursor(null);
     setExpanded(new Set());
     setSelected(key);
   };
@@ -136,7 +180,19 @@ export default function WinProbabilityPage() {
                 </button>
               ))}
             </div>
-            {lastUpdate && docMatches && (
+            {cursor && docMatches && (
+              <div className="flex shrink-0 items-center gap-2 text-right text-xs text-ink sm:text-sm">
+                <span>Viewing {formatTime(cursor.t)}</span>
+                <button
+                  type="button"
+                  onClick={() => setCursor(null)}
+                  className="min-h-11 rounded-md bg-surface px-3 font-medium text-ink-2 hover:bg-raised"
+                >
+                  Latest
+                </button>
+              </div>
+            )}
+            {!cursor && lastUpdate && docMatches && (
               <div className="shrink-0 text-right text-xs text-ink-2 sm:text-sm">
                 {lastUpdate.live ? <>Games in progress<br className="sm:hidden" /><span className="hidden sm:inline"> · </span></> : ''}Updated {formatTime(lastUpdate.t)}
               </div>
@@ -146,18 +202,25 @@ export default function WinProbabilityPage() {
 
         {docMatches && timeline && (
           <>
-            <p className="mb-2 px-1 text-xs text-ink-3">Closest matchups first. Tap one for its full chart and lineups.</p>
+            <p className="mb-2 px-1 text-xs text-ink-3">Closest matchups first. Tap one for its full chart and lineups, and move along a chart to step through the week.</p>
             <div className="grid grid-cols-1 gap-2 sm:gap-3">
               {orderedPairs.map((pair) => {
-                const series = matchupSeries(doc, pair);
-                if (series.length === 0) return null;
                 const key = matchupKey(pair);
+                const { series, events, scores } = matchups.get(key);
+                if (series.length === 0) return null;
                 return (
                   <MatchupRow
                     key={key}
                     doc={doc}
                     pair={pair}
                     series={series}
+                    events={events}
+                    scores={scores}
+                    matchKey={key}
+                    cursor={cursor}
+                    onCursor={(t) => moveCursor(key, t)}
+                    onCursorEnd={() => endCursor(key)}
+                    onSelectEvent={(event) => jumpToEvent(key, event)}
                     timeline={timeline}
                     expanded={expanded.has(key)}
                     onToggle={() => toggleMatchup(key)}
@@ -176,7 +239,7 @@ export default function WinProbabilityPage() {
         {docMatches && (
           <p className="mt-4 text-xs text-ink-3">
             A line above the midpoint favors the top team, and below it the bottom team. Scores and projections come
-            from Sleeper, and game clocks from ESPN. Dotted sections skip time with no games on.
+            from Sleeper, and game clocks from ESPN. Charts only cover the time games are on, and dotted sections skip the gaps between them. White dots mark key moments.
             Each estimate compares current points plus the unplayed share of each starter&apos;s projection.
           </p>
         )}

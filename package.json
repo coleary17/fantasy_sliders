@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && rm -rf dist/data",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test lib/*.test.mjs",
+    "test": "node --test lib/*.test.mjs src/winprob/*.test.mjs",
     "collect": "node scripts/collect-local.mjs"
   },
   "dependencies": {

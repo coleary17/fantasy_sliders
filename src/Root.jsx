@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import App from './App';
+import PlayoffOddsPage from './playoffs/PlayoffOddsPage';
 import WinProbabilityPage from './winprob/WinProbabilityPage';
 
 const VIEWS = [
   { hash: '#/win-probability', label: 'Win probability' },
-  { hash: '#/simulator', label: 'Playoff simulator' },
+  { hash: '#/playoff-odds', label: 'Playoff odds' },
 ];
 
 const currentHash = () => (VIEWS.some((v) => v.hash === window.location.hash) ? window.location.hash : VIEWS[0].hash);
@@ -36,7 +36,8 @@ export default function Root() {
           ))}
         </div>
       </nav>
-      {hash === '#/simulator' ? <App /> : <WinProbabilityPage />}
+      {hash === '#/playoff-odds' && <PlayoffOddsPage />}
+      {hash === '#/win-probability' && <WinProbabilityPage />}
     </>
   );
 }
