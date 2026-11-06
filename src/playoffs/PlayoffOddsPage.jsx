@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { applyPicks, applyReadings, formatOdds, playoffOdds, projectedScores, sortStandings, tableAfterWeeks } from '../../lib/playoffs.mjs';
+import { applyPicks, applyReadings, formatOdds, lastPickedWeek, playoffOdds, projectedScores, sortStandings, tableAfterWeeks } from '../../lib/playoffs.mjs';
 import { formatTime } from '../winprob/data';
 import { loadSeason, loadWeekReadings } from './data';
 import WhatIfMatchups from './WhatIfMatchups';
@@ -23,7 +23,8 @@ function OddsChange({ baseline, odds }) {
 export default function PlayoffOddsPage() {
   const [season, setSeason] = useState(null);
   const [readings, setReadings] = useState([]);
-  const [picks, setPicks] = useState({});
+  const [picks, setPicks] = useState({}); // week number -> that week's picks
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [error, setError] = useState(null);
   const deferredPicks = useDeferredValue(picks); // keeps the slider smooth while odds catch up
 
@@ -52,7 +53,10 @@ export default function PlayoffOddsPage() {
   }, []);
 
   const latest = readings.at(-1);
-  const whatIfWeek = season?.schedule.find((w) => w.week === latest?.week) ?? season?.schedule[0];
+  const matchupWeeks = useMemo(() => (season?.schedule ?? []).filter((w) => w.pairs.length > 0), [season]);
+  const whatIfWeek = matchupWeeks.find((w) => w.week === selectedWeek)
+    ?? matchupWeeks.find((w) => w.week === latest?.week)
+    ?? matchupWeeks[0];
   const schedule = useMemo(() => (season ? applyReadings(season.schedule, readings) : []), [season, readings]);
 
   const baseline = useMemo(() => (season ? playoffOdds({
@@ -61,35 +65,41 @@ export default function PlayoffOddsPage() {
     playoffSpots: season.playoffSpots,
   }) : {}), [season, schedule]);
 
-  const hasPicks = Object.keys(deferredPicks).length > 0;
-  const whatIfWeekNumber = whatIfWeek?.week;
+  const lastPicked = lastPickedWeek(deferredPicks);
+  const hasPicks = lastPicked !== null;
+  const lockedSchedule = useMemo(
+    () => (season ? applyPicks(schedule, deferredPicks, season.teams) : []),
+    [season, schedule, deferredPicks],
+  );
   const odds = useMemo(() => (season && hasPicks ? playoffOdds({
     teams: season.teams,
-    schedule: applyPicks(schedule, whatIfWeekNumber, deferredPicks, season.teams),
+    schedule: lockedSchedule,
     playoffSpots: season.playoffSpots,
-  }) : baseline), [season, schedule, whatIfWeekNumber, deferredPicks, hasPicks, baseline]);
+  }) : baseline), [season, lockedSchedule, hasPicks, baseline]);
 
-  // With picks, the table shows where everyone stands after the picked week.
+  // With picks, the table shows where everyone stands after the last picked week.
   const table = useMemo(() => {
     if (!season) return [];
     if (!hasPicks) return season.teams;
-    const played = applyPicks(schedule, whatIfWeekNumber, deferredPicks, season.teams).filter((w) => w.week <= whatIfWeekNumber);
-    return tableAfterWeeks(season.teams, played);
-  }, [season, schedule, whatIfWeekNumber, deferredPicks, hasPicks]);
+    return tableAfterWeeks(season.teams, lockedSchedule.filter((w) => w.week <= lastPicked));
+  }, [season, lockedSchedule, lastPicked, hasPicks]);
 
   const rows = useMemo(() => (season ? sortStandings(table)
     .map((team) => ({ ...team, odds: odds[team.id], baseline: baseline[team.id] })) : []), [season, table, odds, baseline]);
 
   const names = useMemo(() => Object.fromEntries((season?.teams ?? []).map((team) => [team.id, team.name])), [season]);
 
+  const whatIfWeekNumber = whatIfWeek?.week;
   const projected = useMemo(() => {
     const week = schedule.find((w) => w.week === whatIfWeekNumber);
     return week ? projectedScores(week, season.teams) : {};
   }, [schedule, whatIfWeekNumber, season]);
 
-  const final = season?.schedule.length === 0;
+  const seasonOver = season?.schedule.length === 0;
+  // Picks through the last week leave no games to simulate, so these odds are certain.
+  const final = seasonOver || (hasPicks && lastPicked >= season.schedule.at(-1).week);
   const recordedWeeks = readings.map((r) => r.week).join(' and ');
-  const showMatchups = whatIfWeek && whatIfWeek.pairs.length > 0;
+  const showMatchups = matchupWeeks.length > 0;
 
   return (
     <div className="min-h-screen bg-page pb-12">
@@ -119,7 +129,7 @@ export default function PlayoffOddsPage() {
                       {latest.live ? 'Games in progress · ' : ''}Updated {formatTime(latest.t)}
                     </span>
                   )}
-                  {hasPicks && <span className="text-right font-medium text-ink">Showing your picks</span>}
+                  {hasPicks && <span className="text-right font-medium text-ink">Your picks through Week {lastPicked}</span>}
                 </div>
                 <div className="overflow-hidden rounded-lg bg-surface shadow">
                   <table className="w-full text-left text-sm">
@@ -165,19 +175,22 @@ export default function PlayoffOddsPage() {
                 <div className="lg:order-1">
                   <WhatIfMatchups
                     week={whatIfWeek.week}
+                    weeks={matchupWeeks.map((w) => w.week)}
+                    onWeekChange={setSelectedWeek}
                     pairs={whatIfWeek.pairs}
                     names={names}
                     odds={odds}
+                    final={final}
                     projected={projected}
-                    picks={picks}
+                    picksByWeek={picks}
                     onPicksChange={setPicks}
                   />
                 </div>
               )}
             </div>
-              {hasPicks && <p className="mt-4 px-1 text-xs text-ink-3">With picks, all of Week {whatIfWeekNumber}&apos;s games count as decided, and records and points for include them. The white tick and arrows compare with the odds before your picks.</p>}
+              {hasPicks && <p className="mt-4 px-1 text-xs text-ink-3">With picks, every game through Week {lastPicked} counts as decided, and records and points for include them. Later weeks stay simulated from real scoring, so picks don&apos;t change how good a team looks. The white tick and arrows compare with the odds before your picks.</p>}
               <p className="mt-4 max-w-3xl px-1 text-xs text-ink-3">
-                {final
+                {seasonOver
                   ? 'The regular season is over, so these are the final places.'
                   : <>Each team&apos;s share of 20,000 simulated finishes to the regular season, ranked by record and then points for.
                     Future weeks use season scoring pulled toward the league average, allowing for teams getting better or worse. They don&apos;t look at

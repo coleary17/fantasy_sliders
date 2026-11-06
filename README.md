@@ -30,7 +30,9 @@ pkill -f collect-local
 ## Playoff odds
 
 `lib/playoffs.mjs` simulates the rest of the regular season in the browser, from Sleeper's
-standings and schedule plus the collector's latest reading for the current week.
+standings and schedule plus the collector's latest reading for the current week. The what-if
+picks cover every remaining regular-season week: all games through the last picked week count as
+decided, at their picked or projected scores, and later weeks stay simulated.
 
 ## Deployment
 
