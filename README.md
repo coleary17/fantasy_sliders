@@ -27,6 +27,13 @@ npx netlify-cli blobs:set win-probability 2026-w09 --input public/data/wp/2026-w
 pkill -f collect-local
 ```
 
+### Rebuilding a week that wasn't collected
+
+`npm run backfill -- 8` rebuilds a finished week from ESPN's play-by-play and saves it to
+`public/data/wp`, printing how close the plays came to Sleeper's finals. Each starter's gap is
+spread over their game, so the week always ends on Sleeper's exact scores. Sleeper may have changed a
+past week's projections, so early odds are an estimate. Upload it the same way as a local snapshot.
+
 ## Playoff odds
 
 `lib/playoffs.mjs` simulates the rest of the regular season in the browser, from Sleeper's

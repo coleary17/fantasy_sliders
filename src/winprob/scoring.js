@@ -1,4 +1,4 @@
-import { abbreviatedIndex, creditedPlayers, defenseStatCount, DEFENSE_KINDS, findAbbreviated, normalizeName, playerIndex } from '../../lib/plays.mjs';
+import { abbreviatedIndex, allowedTierPoints, creditedPlayers, defenseStatCount, DEFENSE_KINDS, findAbbreviated, normalizeName, playerIndex } from '../../lib/plays.mjs';
 import { shortPlayerName } from './data.js';
 
 export const LABEL_WIDTH = 22;
@@ -8,10 +8,6 @@ const LABEL_STEP = LABEL_HEIGHT + LABEL_GAP;
 const LABEL_OFFSET = 8; // room between the line and the first label
 const MIN_SACK_SWING = 0.02; // a sack earns a line in the list only if the odds noticed it
 const MIN_TIER_DROP = 2; // smaller drops between points-allowed tiers would mark nearly every score
-const ALLOWED_TIERS = [
-  [0, 'pts_allow_0'], [6, 'pts_allow_1_6'], [13, 'pts_allow_7_13'], [20, 'pts_allow_14_20'],
-  [27, 'pts_allow_21_27'], [34, 'pts_allow_28_34'], [Infinity, 'pts_allow_35p'],
-];
 
 function creditName(doc, id, team) {
   if (id === team) return `${team} DEF`;
@@ -106,11 +102,6 @@ function turnoverMoments(series, play, index) {
   return [...gains].map(([gainer, title]) => moment(play, pin, gainer, title, play.kind === 'SACK' ? { minor: true } : {}));
 }
 
-function tierValue(scoring, allowed) {
-  const tier = ALLOWED_TIERS.find(([most]) => allowed <= most);
-  return scoring[tier[1]] ?? 0;
-}
-
 // Scores that cost a starting defense a points-allowed tier. The label sits with the other team,
 // whose odds the score helps.
 function tierDropMoments(doc, series, plays) {
@@ -120,7 +111,7 @@ function tierDropMoments(doc, series, plays) {
   return plays.filter((p) => p.kind === 'PA').sort((x, y) => x.allowed - y.allowed).flatMap((play) => {
     const earlier = before.get(play.team) ?? 0;
     before.set(play.team, play.allowed);
-    const drop = tierValue(scoring, earlier) - tierValue(scoring, play.allowed);
+    const drop = allowedTierPoints(scoring, earlier) - allowedTierPoints(scoring, play.allowed);
     if (drop < MIN_TIER_DROP) return [];
     const pin = pinned(series, play);
     const owner = ['a', 'b'].find((side) => pin.point[side].starters.includes(play.team));

@@ -203,6 +203,9 @@ export default function WinProbabilityPage() {
         {docMatches && timeline && (
           <>
             <p className="mb-2 px-1 text-xs text-ink-3">Closest matchups first. Tap one for its full chart and lineups, and move along a chart to step through the week.</p>
+            {doc.reconstructed && (
+              <p className="mb-2 px-1 text-xs text-ink-3">Rebuilt from play-by-play after the games, so the lines are close estimates rather than a live recording. Final scores and lineups are exact.</p>
+            )}
             <div className="grid grid-cols-1 gap-2 sm:gap-3">
               {orderedPairs.map((pair) => {
                 const key = matchupKey(pair);
