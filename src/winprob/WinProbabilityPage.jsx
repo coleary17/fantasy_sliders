@@ -191,21 +191,16 @@ export default function WinProbabilityPage() {
 
         {keys && keys.length > 0 && (
           <div className="sticky top-0 z-30 -mx-2 mb-2 flex items-center justify-between gap-3 bg-page px-2 py-2 sm:-mx-4 sm:mb-4 sm:px-4">
-            <div className="flex min-w-0 gap-1 overflow-x-auto" role="group" aria-label="Week">
-              {keys.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => selectWeek(key)}
-                  aria-pressed={key === activeKey}
-                  className={`min-h-11 shrink-0 rounded-md px-3 text-sm font-medium ${
-                    key === activeKey ? 'bg-ink text-page' : 'bg-surface text-ink-2 hover:bg-raised'
-                  }`}
-                >
-                  Week {weekNumber(key)}
-                </button>
+            <select
+              value={activeKey}
+              onChange={(event) => selectWeek(event.target.value)}
+              aria-label="Week"
+              className="min-h-11 shrink-0 rounded-md bg-surface px-3 text-sm font-medium text-ink hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+            >
+              {[...keys].reverse().map((key) => (
+                <option key={key} value={key}>Week {weekNumber(key)}</option>
               ))}
-            </div>
+            </select>
             {cursor && docMatches && (
               <div className="flex shrink-0 items-center gap-2 text-right text-xs text-ink sm:text-sm">
                 <span>Viewing {formatTime(cursor.t)}</span>
