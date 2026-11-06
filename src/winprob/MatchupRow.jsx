@@ -1,7 +1,7 @@
 import { memo, useId } from 'react';
 import MatchupChart from './MatchupChart';
 import MatchupLineups from './MatchupLineups';
-import { formatPercent, formatTime, indexAtTime, matchupColors } from './data';
+import { formatPercent, formatTime, indexAtTime, matchupColors, scoreShare } from './data';
 import { keyMoments } from './scoring';
 
 const MatchupTable = memo(function MatchupTable({ series, nameA, nameB }) {
@@ -72,13 +72,16 @@ function KeyMoments({ events, scores, series, nameA, nameB, colorA, colorB, acti
 }
 
 // Fits the whole week into the row. The text beside it carries the exact values.
-function Sparkline({ series, xs, width, colorA, colorB, shownIndex, showCursor, onScrub, onScrubEnd }) {
+function Sparkline({ mode, scoreMax, series, xs, width, colorA, colorB, shownIndex, showCursor, onScrub, onScrubEnd }) {
   const clipId = useId();
   const xPercent = (i) => (width > 0 ? (xs[i] / width) * 100 : 100);
   const yPercent = (p) => (1 - p) * 100;
   const points = series.map((s, i) => `${xPercent(i)},${yPercent(s.probability)}`).join(' ');
   const area = series.length > 1 ? `${xPercent(0)},50 ${points} ${xPercent(series.length - 1)},50` : '';
   const shown = series[shownIndex];
+  const scoreMode = mode === 'score';
+  const scorePercent = (points) => (1 - scoreShare(points, scoreMax)) * 100;
+  const scorePoints = (side) => series.map((s, i) => `${xPercent(i)},${scorePercent(s[side].points)}`).join(' ');
 
   // Mouse only: on a touch screen, a tap on the row opens it.
   const handleMove = (event) => {
@@ -107,8 +110,19 @@ function Sparkline({ series, xs, width, colorA, colorB, shownIndex, showCursor, 
           <clipPath id={`${clipId}-a`}><rect x="-5" y="-5" width="110" height="55" /></clipPath>
           <clipPath id={`${clipId}-b`}><rect x="-5" y="50" width="110" height="55" /></clipPath>
         </defs>
-        <line x1="0" x2="100" y1="50" y2="50" stroke="#6f6e68" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-        {[['a', colorA], ['b', colorB]].map(([side, color]) => (
+        {!scoreMode && <line x1="0" x2="100" y1="50" y2="50" stroke="#6f6e68" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+        {[['a', colorA], ['b', colorB]].map(([side, color]) => (scoreMode ? (
+          <polyline
+            key={side}
+            points={scorePoints(side)}
+            fill="none"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        ) : (
           <g key={side} clipPath={`url(#${clipId}-${side})`}>
             <polygon points={area} fill={color} fillOpacity="0.2" />
             <polyline
@@ -121,43 +135,46 @@ function Sparkline({ series, xs, width, colorA, colorB, shownIndex, showCursor, 
               vectorEffect="non-scaling-stroke"
             />
           </g>
-        ))}
+        )))}
         {showCursor && (
           <line x1={xPercent(shownIndex)} x2={xPercent(shownIndex)} y1="0" y2="100" stroke="#9a9990" strokeWidth="1" vectorEffect="non-scaling-stroke" />
         )}
       </svg>
-      <span
-        className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-surface"
-        style={{
-          left: `${xPercent(shownIndex)}%`,
-          top: `${yPercent(shown.probability)}%`,
-          background: shown.probability >= 0.5 ? colorA : colorB,
-        }}
-      />
+      {(scoreMode
+        ? [[scorePercent(shown.a.points), colorA], [scorePercent(shown.b.points), colorB]]
+        : [[yPercent(shown.probability), shown.probability >= 0.5 ? colorA : colorB]]
+      ).map(([top, background]) => (
+        <span
+          key={background}
+          className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-surface"
+          style={{ left: `${xPercent(shownIndex)}%`, top: `${top}%`, background }}
+        />
+      ))}
     </div>
   );
 }
 
-function TeamSummary({ name, team, probability, leading, color }) {
+function TeamSummary({ mode, name, team, probability, leading, color }) {
+  const scoreMode = mode === 'score';
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="w-1 self-stretch rounded-full" style={{ background: color }} aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold leading-snug text-ink [overflow-wrap:anywhere]">{name}</div>
         <div className="text-xs tabular-nums text-ink-2">
-          {team.points.toFixed(1)} pts
+          {scoreMode ? `${formatPercent(probability)} to win` : `${team.points.toFixed(1)} pts`}
           <span className="hidden min-[360px]:inline"> · proj {team.expected.toFixed(1)}</span>
         </div>
       </div>
       <div className={`shrink-0 text-base tabular-nums text-ink ${leading ? 'font-bold' : 'font-normal'}`}>
         {leading && <span className="mr-0.5 text-[10px] align-middle" aria-hidden="true">▲</span>}
-        {formatPercent(probability)}
+        {scoreMode ? team.points.toFixed(1) : formatPercent(probability)}
       </div>
     </div>
   );
 }
 
-export default function MatchupRow({ doc, pair, series, events, scores, timeline, expanded, cursor, matchKey, onCursor, onCursorEnd, onSelectEvent, onToggle, onScroll, scrollRef }) {
+export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, scores, timeline, expanded, cursor, matchKey, onCursor, onCursorEnd, onSelectEvent, onToggle, onScroll, scrollRef }) {
   const [a, b] = pair;
   const nameA = doc.teams[a];
   const nameB = doc.teams[b];
@@ -168,6 +185,7 @@ export default function MatchupRow({ doc, pair, series, events, scores, timeline
   const focused = cursor !== null && cursor.source === matchKey;
   const panelId = `matchup-${a}-${b}`;
   const [colorA, colorB] = matchupColors(doc, pair);
+  const leader = mode === 'score' ? shown.a.points - shown.b.points : shown.probability - 0.5;
 
   return (
     <section
@@ -181,10 +199,12 @@ export default function MatchupRow({ doc, pair, series, events, scores, timeline
         className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4"
       >
         <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-md">
-          <TeamSummary name={nameA} team={shown.a} probability={shown.probability} leading={shown.probability > 0.5} color={colorA} />
-          <TeamSummary name={nameB} team={shown.b} probability={1 - shown.probability} leading={shown.probability < 0.5} color={colorB} />
+          <TeamSummary mode={mode} name={nameA} team={shown.a} probability={shown.probability} leading={leader > 0} color={colorA} />
+          <TeamSummary mode={mode} name={nameB} team={shown.b} probability={1 - shown.probability} leading={leader < 0} color={colorB} />
         </div>
         <Sparkline
+          mode={mode}
+          scoreMax={scoreMax}
           series={series}
           xs={timeline.xs}
           width={timeline.width}
@@ -201,6 +221,8 @@ export default function MatchupRow({ doc, pair, series, events, scores, timeline
         {expanded && (
           <>
             <MatchupChart
+              mode={mode}
+              scoreMax={scoreMax}
               series={series}
               xs={timeline.xs}
               ticks={timeline.ticks}

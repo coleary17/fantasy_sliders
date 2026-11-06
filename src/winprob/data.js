@@ -39,6 +39,18 @@ export function matchupSeries(doc, [a, b]) {
 
 export const matchupKey = (pair) => pair.join('-');
 
+const SCORE_AXIS_STEP = 25;
+const MIN_SCORE_AXIS = 50; // keeps a week that hasn't started from drawing a tiny scale
+
+// The top of a matchup's score axis: the next round number at or above its highest score.
+export function scoreAxisMax(series) {
+  const high = Math.max(0, ...series.flatMap((s) => [s.a.points, s.b.points]));
+  return Math.max(MIN_SCORE_AXIS, Math.ceil(high / SCORE_AXIS_STEP) * SCORE_AXIS_STEP);
+}
+
+// A score's height on that axis, from 0 to 1. A team just below zero sits on the baseline.
+export const scoreShare = (points, axisMax) => Math.min(Math.max(points, 0) / axisMax, 1);
+
 // The latest reading at or before a time. With no time, the latest reading overall.
 export function indexAtTime(series, t) {
   if (t === null || t === undefined) return series.length - 1;

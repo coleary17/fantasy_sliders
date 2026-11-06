@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findScores, formatStatLine, keyMoments, layoutScoreLabels, statsAt, LABEL_HEIGHT } from './scoring.js';
+import { findScores, formatStatLine, keyMoments, layoutScoreLabels, scoreLineAnchor, statsAt, LABEL_HEIGHT } from './scoring.js';
+import { scoreAxisMax, scoreShare } from './data.js';
 
 const players = {
   qb: { name: 'Trevor Lawrence', team: 'JAX', pos: 'QB' },
@@ -148,4 +149,32 @@ test('a score that costs a starting defense 2+ points is marked for the other te
   assert.equal(scores.length, 2, 'a one-point drop is not marked');
   assert.equal(scores[0].negative, true);
   assert.deepEqual(findScores(defenseDoc([pa('x', 7)]), twoPoints(team('rb'), team('BAL'))), [], 'older weeks have no tier scoring');
+});
+
+test('in score mode a label sits on the line it moved, pointing away from the other line', () => {
+  const points = [{ x: 100, aY: 40, bY: 90 }];
+  const labels = layoutScoreLabels(
+    [
+      { key: 'lead', index: 0, gainer: 'a', scoreSide: 'a' },
+      { key: 'drop', index: 0, gainer: 'a', scoreSide: 'b', negative: true },
+    ],
+    points, 12, 154, scoreLineAnchor,
+  );
+  const [lead, drop] = labels;
+  assert.deepEqual([lead.side, lead.lineY], ['a', 40]);
+  assert.ok(lead.y < lead.lineY, 'the higher line labels upward');
+  assert.deepEqual([drop.side, drop.lineY], ['b', 90]);
+  assert.ok(drop.y > drop.lineY, 'the lower line labels downward');
+});
+
+test('the score axis rounds up to the next 25 and never starts tiny', () => {
+  const at = (a, b) => ({ a: { points: a }, b: { points: b } });
+  assert.equal(scoreAxisMax([at(0, 0)]), 50);
+  assert.equal(scoreAxisMax([at(12.3, 40), at(101.2, 88)]), 125);
+  assert.equal(scoreAxisMax([at(100, 75)]), 100);
+});
+
+test('a score below zero sits on the baseline of the axis', () => {
+  assert.equal(scoreShare(-1.5, 100), 0);
+  assert.equal(scoreShare(50, 100), 0.5);
 });

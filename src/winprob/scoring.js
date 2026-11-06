@@ -52,6 +52,7 @@ function moment(play, { index, point, previous }, gainer, title, extra = {}) {
     gainer,
     kind: play.kind,
     flipped: false,
+    scoreSide: gainer, // whose score this play moved, which isn't always the team it helped
     from: share(previous.probability),
     to: share(point.probability),
     title,
@@ -96,10 +97,10 @@ function turnoverMoments(series, play, index) {
   const gains = new Map();
   if (victimSide && play.kind !== 'SACK') {
     const name = spaced(play.victim);
-    gains.set(opposite(victimSide), play.kind === 'INT' ? `${name} throws INT` : `${name} loses a fumble`);
+    gains.set(opposite(victimSide), { title: play.kind === 'INT' ? `${name} throws INT` : `${name} loses a fumble`, scoreSide: victimSide });
   }
-  if (defended && !play.scored) gains.set(defended, defenseTitle(play));
-  return [...gains].map(([gainer, title]) => moment(play, pin, gainer, title, play.kind === 'SACK' ? { minor: true } : {}));
+  if (defended && !play.scored) gains.set(defended, { title: defenseTitle(play), scoreSide: defended });
+  return [...gains].map(([gainer, { title, scoreSide }]) => moment(play, pin, gainer, title, { scoreSide, ...(play.kind === 'SACK' ? { minor: true } : {}) }));
 }
 
 // Scores that cost a starting defense a points-allowed tier. The label sits with the other team,
@@ -116,7 +117,7 @@ function tierDropMoments(doc, series, plays) {
     const pin = pinned(series, play);
     const owner = ['a', 'b'].find((side) => pin.point[side].starters.includes(play.team));
     if (!owner) return [];
-    return [moment(play, pin, opposite(owner), `${play.team} DEF −${drop} pts: ${play.allowed} allowed`, { negative: true })];
+    return [moment(play, pin, opposite(owner), `${play.team} DEF −${drop} pts: ${play.allowed} allowed`, { negative: true, scoreSide: owner })];
   });
 }
 
@@ -157,20 +158,31 @@ export function keyMoments(events, allScores) {
   return [...labeled, ...swings].sort((x, y) => x.index - y.index || (x.playT ?? x.t) - (y.playT ?? y.t));
 }
 
+// On the win probability line, a label sits on the side of the team it helped.
+const probabilityAnchor = (score, point) => ({ side: score.gainer, lineY: point.y, above: score.gainer === 'a' });
+
+// With a line for each team, a label sits on the line it moved, pointing away from the other line.
+export function scoreLineAnchor(score, point) {
+  const own = point[`${score.scoreSide}Y`];
+  const other = point[`${score.scoreSide === 'a' ? 'b' : 'a'}Y`];
+  return { side: score.scoreSide, lineY: own, above: own <= other };
+}
+
 // Places chart labels beside the line, stacking any that would overlap. A stack that runs out
 // of room at the edge of the plot continues back past the line, so labels never leave the chart.
-export function layoutScoreLabels(scores, points, top, bottom) {
-  const laneEnds = { a: [], b: [] };
+export function layoutScoreLabels(scores, points, top, bottom, anchor = probabilityAnchor) {
+  const laneEnds = { above: [], below: [] };
   const lowest = bottom - LABEL_HEIGHT;
   return [...scores].sort((x, y) => x.index - y.index).map((score) => {
-    const { x, y: lineY } = points[score.index];
-    const ends = laneEnds[score.gainer];
+    const { x } = points[score.index];
+    const { side, lineY, above } = anchor(score, points[score.index]);
+    const ends = above ? laneEnds.above : laneEnds.below;
     const free = ends.findIndex((end) => end + LABEL_GAP <= x - LABEL_WIDTH / 2);
     const level = free === -1 ? ends.length : free;
     ends[level] = x + LABEL_WIDTH / 2;
 
     let y;
-    if (score.gainer === 'a') {
+    if (above) {
       const base = Math.max(lineY - LABEL_OFFSET - LABEL_HEIGHT, top);
       const room = Math.floor((base - top) / LABEL_STEP) + 1;
       y = level < room ? base - level * LABEL_STEP : base + (level - room + 1) * LABEL_STEP;
@@ -179,7 +191,7 @@ export function layoutScoreLabels(scores, points, top, bottom) {
       const room = Math.floor((lowest - base) / LABEL_STEP) + 1;
       y = level < room ? base + level * LABEL_STEP : base - (level - room + 1) * LABEL_STEP;
     }
-    return { ...score, x, lineY, y };
+    return { ...score, side, x, lineY, y };
   });
 }
 

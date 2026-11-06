@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { formatPercent, formatTime, inSameWindow } from './data';
-import { LABEL_HEIGHT, LABEL_WIDTH, layoutScoreLabels } from './scoring';
+import { formatPercent, formatTime, inSameWindow, scoreShare } from './data';
+import { LABEL_HEIGHT, LABEL_WIDTH, layoutScoreLabels, scoreLineAnchor } from './scoring';
 
 const HEIGHT = 180;
 const TOP = 12;
@@ -16,16 +16,17 @@ const AREA_OPACITY = 0.2;
 const EVENT_SNAP_PX = 10;
 const INK = '#f0efec';
 const SACK_TICK = 5;
+const END_LABEL_GAP = 14; // keeps the two final scores readable when they're close
 
 const yFor = (p) => TOP + (1 - p) * (HEIGHT - TOP - BOTTOM);
 
-function buildSegments(points) {
+function buildSegments(points, yKey = 'y') {
   const solid = [];
   const breaks = [];
   points.forEach((point, i) => {
     if (i === 0) return;
     const prev = points[i - 1];
-    const line = `M${prev.x},${prev.y}L${point.x},${point.y}`;
+    const line = `M${prev.x},${prev[yKey]}L${point.x},${point[yKey]}`;
     (inSameWindow(prev, point) ? solid : breaks).push(line);
   });
   return { solid: solid.join(''), breaks: breaks.join('') };
@@ -38,11 +39,18 @@ function buildArea(points) {
   return `M${points[0].x},${mid}${line}L${points.at(-1).x},${mid}Z`;
 }
 
+// Pushes the two final scores apart around their midpoint when they'd otherwise overlap.
+function spreadEndLabels(yA, yB) {
+  const shortfall = END_LABEL_GAP - Math.abs(yA - yB);
+  if (shortfall <= 0) return [yA, yB];
+  return yA <= yB ? [yA - shortfall / 2, yB + shortfall / 2] : [yA + shortfall / 2, yB - shortfall / 2];
+}
+
 function ColorKey({ color }) {
   return <span className="mr-1.5 inline-block h-0.5 w-3 rounded-full align-middle" style={{ background: color }} aria-hidden="true" />;
 }
 
-export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, nameB, colorA, colorB, scrollRef, onScroll, events, scores, shownIndex, showTooltip, onCursor, onCursorEnd }) {
+export default function MatchupChart({ mode, scoreMax, series, xs, ticks, contentWidth, nameA, nameB, colorA, colorB, scrollRef, onScroll, events, scores, shownIndex, showTooltip, onCursor, onCursorEnd }) {
   const [tooltipX, setTooltipX] = useState(0);
   const [visibleWidth, setVisibleWidth] = useState(0);
   const scroller = useRef(null);
@@ -66,10 +74,19 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
   const stretch = contentWidth > 0 && plotWidth > contentWidth ? plotWidth / contentWidth : 1;
 
   const points = useMemo(
-    () => series.map((s, i) => ({ ...s, x: xs[i] * stretch + LEFT_PAD, y: yFor(s.probability) })),
-    [series, xs, stretch],
+    () => series.map((s, i) => ({
+      ...s,
+      x: xs[i] * stretch + LEFT_PAD,
+      y: yFor(s.probability),
+      aY: yFor(scoreShare(s.a.points, scoreMax)),
+      bY: yFor(scoreShare(s.b.points, scoreMax)),
+    })),
+    [series, xs, stretch, scoreMax],
   );
+  const scoreMode = mode === 'score';
   const { solid, breaks } = useMemo(() => buildSegments(points), [points]);
+  const scoreLines = useMemo(() => ({ a: buildSegments(points, 'aY'), b: buildSegments(points, 'bY') }), [points]);
+  const yOn = (point, side) => (scoreMode ? point[`${side}Y`] : point.y);
   const area = useMemo(() => buildArea(points), [points]);
   const colorFor = (p) => (p >= 0.5 ? colorA : colorB);
   const svgWidth = contentWidth * stretch + LEFT_PAD + RIGHT_PAD;
@@ -77,7 +94,10 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
   const hovered = shownIndex === null ? null : points[shownIndex];
   const hoveredEvent = hovered && events.find((e) => e.index === shownIndex);
   const hoveredScores = hovered ? scores.filter((s) => s.index === shownIndex) : [];
-  const labels = useMemo(() => layoutScoreLabels(scores.filter((s) => !s.minor), points, yFor(1), yFor(0)), [scores, points]);
+  const labels = useMemo(
+    () => layoutScoreLabels(scores.filter((s) => !s.minor), points, yFor(1), yFor(0), scoreMode ? scoreLineAnchor : undefined),
+    [scores, points, scoreMode],
+  );
   const ticksOnLine = scores.filter((s) => s.minor);
 
   const nearestIndex = (x) => {
@@ -140,22 +160,38 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
     if (event.pointerType === 'mouse') onCursorEnd();
   };
 
-  const summary = `Win probability over time for ${nameA} against ${nameB}. ${nameA} is at ${formatPercent(last.probability)} at the latest update. Use the left and right arrow keys to step through updates.`;
+  const summary = scoreMode
+    ? `Score over time for ${nameA} against ${nameB}. At the latest update it is ${nameA} ${last.a.points.toFixed(1)}, ${nameB} ${last.b.points.toFixed(1)}. Use the left and right arrow keys to step through updates.`
+    : `Win probability over time for ${nameA} against ${nameB}. ${nameA} is at ${formatPercent(last.probability)} at the latest update. Use the left and right arrow keys to step through updates.`;
+  const [endYA, endYB] = spreadEndLabels(last.aY, last.bY);
+  const leftAxis = scoreMode ? [scoreMax, scoreMax / 2, 0] : ['100%', '50%', '100%'];
 
   return (
+    <>
+    {/* Score lines can run anywhere in the plot, so their key sits above it. */}
+    {scoreMode && (
+      <div className="mb-1 flex flex-wrap gap-x-4 gap-y-0.5 pl-9 text-xs font-medium text-ink-2 sm:pl-11">
+        <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorA} />{nameA}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorB} />{nameB}</span>
+      </div>
+    )}
     <div className="flex">
       <div className="relative w-9 shrink-0 text-[11px] sm:w-11 sm:text-xs text-ink-3" style={{ height: HEIGHT }} aria-hidden="true">
-        <span className="absolute right-1.5 -translate-y-1/2" style={{ top: yFor(1) }}>100%</span>
-        <span className="absolute right-1.5 -translate-y-1/2" style={{ top: yFor(0.5) }}>50%</span>
-        <span className="absolute right-1.5 -translate-y-1/2" style={{ top: yFor(0) }}>100%</span>
+        {[1, 0.5, 0].map((p, i) => (
+          <span key={p} className="absolute right-1.5 -translate-y-1/2" style={{ top: yFor(p) }}>{leftAxis[i]}</span>
+        ))}
       </div>
       <div className="relative min-w-0 flex-1">
-        <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(1) + 2 }}>
-          <ColorKey color={colorA} />↑ {nameA}
-        </div>
-        <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(0) - 20 }}>
-          <ColorKey color={colorB} />↓ {nameB}
-        </div>
+        {!scoreMode && (
+          <>
+            <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(1) + 2 }}>
+              <ColorKey color={colorA} />↑ {nameA}
+            </div>
+            <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(0) - 20 }}>
+              <ColorKey color={colorB} />↓ {nameB}
+            </div>
+          </>
+        )}
         {hovered && showTooltip && (
           <div
             className="pointer-events-none absolute top-2 z-20 rounded-md border border-line bg-surface p-2 text-xs shadow-md"
@@ -199,7 +235,7 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
               {[0, 1].map((p) => (
                 <line key={p} x1={0} x2="100%" y1={yFor(p)} y2={yFor(p)} stroke={GRID} />
               ))}
-              <line x1={0} x2="100%" y1={yFor(0.5)} y2={yFor(0.5)} stroke={MIDLINE} />
+              <line x1={0} x2="100%" y1={yFor(0.5)} y2={yFor(0.5)} stroke={scoreMode ? GRID : MIDLINE} />
               {ticks.map((tick) => {
                 const x = tick.x * stretch + LEFT_PAD;
                 return (
@@ -215,37 +251,46 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
                 <clipPath id={`${clipId}-a`}><rect x="0" y="0" width={svgWidth} height={yFor(0.5)} /></clipPath>
                 <clipPath id={`${clipId}-b`}><rect x="0" y={yFor(0.5)} width={svgWidth} height={HEIGHT} /></clipPath>
               </defs>
-              {[['a', colorA], ['b', colorB]].map(([side, color]) => (
+              {[['a', colorA], ['b', colorB]].map(([side, color]) => (scoreMode ? (
+                <g key={side}>
+                  <path d={scoreLines[side].breaks} fill="none" stroke={color} strokeOpacity="0.7" strokeWidth="2" strokeDasharray="2 4" strokeLinecap="round" />
+                  <path d={scoreLines[side].solid} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                </g>
+              ) : (
                 <g key={side} clipPath={`url(#${clipId}-${side})`}>
                   <path d={area} fill={color} fillOpacity={AREA_OPACITY} />
                   <path d={breaks} fill="none" stroke={color} strokeOpacity="0.7" strokeWidth="2" strokeDasharray="2 4" strokeLinecap="round" />
                   <path d={solid} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                 </g>
-              ))}
+              )))}
               {events.map((event) => (
                 <circle
                   key={event.t}
                   cx={points[event.index].x}
-                  cy={points[event.index].y}
+                  cy={yOn(points[event.index], event.gainer)}
                   r={event.flipped ? 5 : 4}
                   fill={INK}
                   stroke={SURFACE}
                   strokeWidth="2"
                 />
               ))}
-              {ticksOnLine.map((tick) => (
-                <line
-                  key={tick.key}
-                  x1={points[tick.index].x}
-                  x2={points[tick.index].x}
-                  y1={points[tick.index].y - SACK_TICK}
-                  y2={points[tick.index].y + SACK_TICK}
-                  stroke={tick.gainer === 'a' ? colorA : colorB}
-                  strokeWidth="1.5"
-                />
-              ))}
+              {ticksOnLine.map((tick) => {
+                const side = scoreMode ? tick.scoreSide : tick.gainer;
+                const y = yOn(points[tick.index], side);
+                return (
+                  <line
+                    key={tick.key}
+                    x1={points[tick.index].x}
+                    x2={points[tick.index].x}
+                    y1={y - SACK_TICK}
+                    y2={y + SACK_TICK}
+                    stroke={side === 'a' ? colorA : colorB}
+                    strokeWidth="1.5"
+                  />
+                );
+              })}
               {labels.map((label) => {
-                const color = label.gainer === 'a' ? colorA : colorB;
+                const color = label.side === 'a' ? colorA : colorB;
                 const td = label.kind === 'TD';
                 const stemEnd = label.y < label.lineY ? label.y + LABEL_HEIGHT : label.y;
                 return (
@@ -256,14 +301,34 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
                   </g>
                 );
               })}
-              <circle cx={last.x} cy={last.y} r="4" fill={colorFor(last.probability)} stroke={SURFACE} strokeWidth="2" />
-              <text x={last.x + 9} y={last.y + 4} fontSize="12" fontWeight="600" fill={INK}>
-                {formatPercent(last.probability)}
-              </text>
+              {scoreMode ? (
+                <>
+                  {[[last.aY, endYA, last.a.points, colorA], [last.bY, endYB, last.b.points, colorB]].map(([y, labelY, score, color], i) => (
+                    <g key={color + i}>
+                      <circle cx={last.x} cy={y} r="4" fill={color} stroke={SURFACE} strokeWidth="2" />
+                      <text x={last.x + 9} y={labelY + 4} fontSize="12" fontWeight="600" fill={INK}>{score.toFixed(1)}</text>
+                    </g>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <circle cx={last.x} cy={last.y} r="4" fill={colorFor(last.probability)} stroke={SURFACE} strokeWidth="2" />
+                  <text x={last.x + 9} y={last.y + 4} fontSize="12" fontWeight="600" fill={INK}>
+                    {formatPercent(last.probability)}
+                  </text>
+                </>
+              )}
               {hovered && (
                 <>
                   <line x1={hovered.x} x2={hovered.x} y1={yFor(1)} y2={yFor(0)} stroke="#9a9990" />
-                  <circle cx={hovered.x} cy={hovered.y} r="4" fill={colorFor(hovered.probability)} stroke={SURFACE} strokeWidth="2" />
+                  {scoreMode ? (
+                    <>
+                      <circle cx={hovered.x} cy={hovered.aY} r="4" fill={colorA} stroke={SURFACE} strokeWidth="2" />
+                      <circle cx={hovered.x} cy={hovered.bY} r="4" fill={colorB} stroke={SURFACE} strokeWidth="2" />
+                    </>
+                  ) : (
+                    <circle cx={hovered.x} cy={hovered.y} r="4" fill={colorFor(hovered.probability)} stroke={SURFACE} strokeWidth="2" />
+                  )}
                 </>
               )}
             </svg>
@@ -271,5 +336,6 @@ export default function MatchupChart({ series, xs, ticks, contentWidth, nameA, n
         </div>
       </div>
     </div>
+    </>
   );
 }
