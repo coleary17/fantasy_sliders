@@ -1,14 +1,37 @@
-import { memo, useId } from 'react';
+import { memo, useId, useRef, useState } from 'react';
+import useIsPhone from '../useIsPhone';
 import MatchupChart from './MatchupChart';
 import MatchupLineups from './MatchupLineups';
 import { formatPercent, formatTime, indexAtTime, matchupColors, scoreShare } from './data';
 import { keyMoments } from './scoring';
 
-const MatchupTable = memo(function MatchupTable({ series, nameA, nameB }) {
+const TABS = [['moments', 'Moments'], ['lineups', 'Lineups'], ['data', 'Data']];
+
+// On a phone each part of an open row is its own tab, so the lineups aren't a long scroll away.
+function PanelTabs({ tab, onChange }) {
   return (
-    <details className="text-sm">
-      <summary className="cursor-pointer py-3 text-ink-2">Show data table</summary>
-      <div className="max-h-64 overflow-auto">
+    <div role="tablist" aria-label="Matchup details" className="mt-3 flex gap-1 sm:hidden">
+      {TABS.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          aria-selected={tab === value}
+          onClick={() => onChange(value)}
+          className={`min-h-11 flex-1 rounded-md text-sm font-medium ${tab === value ? 'bg-ink text-page' : 'bg-raised text-ink-2'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const MatchupTable = memo(function MatchupTable({ series, nameA, nameB, open }) {
+  return (
+    <details className="text-sm" open={open}>
+      <summary className="cursor-pointer py-3 text-ink-2 max-sm:hidden">Show data table</summary>
+      <div className="max-h-64 overflow-auto max-sm:max-h-none max-sm:pt-3">
         <table className="w-full text-left text-xs">
           <thead className="sticky top-0 bg-surface text-ink-3">
             <tr>
@@ -174,7 +197,7 @@ function TeamSummary({ mode, name, team, probability, leading, color }) {
   );
 }
 
-export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, scores, timeline, expanded, cursor, matchKey, onCursor, onCursorEnd, onSelectEvent, onToggle, onScroll, scrollRef }) {
+export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, scores, timeline, fit, onToggleZoom, expanded, cursor, matchKey, onCursor, onCursorEnd, onSelectEvent, onToggle, onScroll, scrollRef }) {
   const [a, b] = pair;
   const nameA = doc.teams[a];
   const nameB = doc.teams[b];
@@ -186,10 +209,24 @@ export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, 
   const panelId = `matchup-${a}-${b}`;
   const [colorA, colorB] = matchupColors(doc, pair);
   const leader = mode === 'score' ? shown.a.points - shown.b.points : shown.probability - 0.5;
+  const isPhone = useIsPhone();
+  const [tab, setTab] = useState('moments');
+  const sectionRef = useRef(null);
+  const tabClass = (value) => (tab === value ? '' : 'max-sm:hidden');
+
+  // Closing from far down a long row would otherwise strand the reader somewhere further along the page.
+  const closeFromChart = () => {
+    onToggle();
+    requestAnimationFrame(() => {
+      const section = sectionRef.current;
+      if (section && section.getBoundingClientRect().top < 0) section.scrollIntoView({ block: 'start' });
+    });
+  };
 
   return (
     <section
-      className={`rounded-lg bg-surface shadow transition-opacity duration-150 ${dimmed ? 'opacity-50' : ''} ${focused ? 'ring-1 ring-ink-3' : ''}`}
+      ref={sectionRef}
+      className={`scroll-mt-[64px] rounded-lg bg-surface shadow transition-opacity duration-150 ${dimmed ? 'opacity-50' : ''} ${focused ? 'ring-1 ring-ink-3' : ''}`}
       aria-label={`${nameA} vs ${nameB}`}>
       <button
         type="button"
@@ -227,6 +264,10 @@ export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, 
               xs={timeline.xs}
               ticks={timeline.ticks}
               contentWidth={timeline.width}
+              fit={fit}
+              isPhone={isPhone}
+              onToggleZoom={onToggleZoom}
+              onClose={closeFromChart}
               nameA={nameA}
               nameB={nameB}
               colorA={colorA}
@@ -240,19 +281,26 @@ export default function MatchupRow({ mode, scoreMax, doc, pair, series, events, 
               onCursor={onCursor}
               onCursorEnd={onCursorEnd}
             />
-            <KeyMoments
-              events={events}
-              scores={scores}
-              series={series}
-              nameA={nameA}
-              nameB={nameB}
-              colorA={colorA}
-              colorB={colorB}
-              activeTime={cursorTime}
-              onSelect={onSelectEvent}
-            />
-            <MatchupLineups doc={doc} pair={pair} atTime={cursorTime} />
-            <MatchupTable series={series} nameA={nameA} nameB={nameB} />
+            <PanelTabs tab={tab} onChange={setTab} />
+            <div className={tabClass('moments')}>
+              <KeyMoments
+                events={events}
+                scores={scores}
+                series={series}
+                nameA={nameA}
+                nameB={nameB}
+                colorA={colorA}
+                colorB={colorB}
+                activeTime={cursorTime}
+                onSelect={onSelectEvent}
+              />
+            </div>
+            <div className={tabClass('lineups')}>
+              <MatchupLineups doc={doc} pair={pair} atTime={cursorTime} />
+            </div>
+            <div className={tabClass('data')}>
+              <MatchupTable series={series} nameA={nameA} nameB={nameB} open={isPhone} />
+            </div>
           </>
         )}
       </div>

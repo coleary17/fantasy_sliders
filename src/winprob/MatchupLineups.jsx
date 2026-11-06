@@ -64,8 +64,8 @@ export default function MatchupLineups({ doc, pair, atTime }) {
   const rows = Array.from({ length: rowCount }, (_, index) => index);
 
   return (
-    <details open className="mt-2 border-t border-line">
-      <summary className="cursor-pointer py-3 text-sm text-ink-2">
+    <details open className="mt-2 border-line sm:border-t">
+      <summary className="cursor-pointer py-3 text-sm text-ink-2 max-sm:hidden">
         Lineups and stats{atTime !== null && <span className="text-ink-3"> · {formatTime(snapshot.t)}</span>}
       </summary>
       <div className="divide-y divide-line" role="table" aria-label={`Lineups: ${doc.teams[a]} vs ${doc.teams[b]}`}>

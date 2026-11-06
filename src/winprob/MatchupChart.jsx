@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { formatPercent, formatTime, inSameWindow, scoreShare } from './data';
-import { LABEL_HEIGHT, LABEL_WIDTH, layoutScoreLabels, scoreLineAnchor } from './scoring';
+import { LABEL_HEIGHT, LABEL_WIDTH, layoutScoreLabels, scoreLineAnchor, thinMarks } from './scoring';
 
 const HEIGHT = 180;
 const TOP = 12;
@@ -17,6 +17,10 @@ const EVENT_SNAP_PX = 10;
 const INK = '#f0efec';
 const SACK_TICK = 5;
 const END_LABEL_GAP = 14; // keeps the two final scores readable when they're close
+const MIN_TICK_GAP = 72;
+const FIT_TICK_GAP = 110; // the first label starts at the axis, so the next has further to clear
+const FIT_LABEL_GAP = LABEL_WIDTH + 6; // a squeezed week keeps only the labels that fit side by side
+const FIT_EVENT_GAP = 14;
 
 const yFor = (p) => TOP + (1 - p) * (HEIGHT - TOP - BOTTOM);
 
@@ -50,9 +54,43 @@ function ColorKey({ color }) {
   return <span className="mr-1.5 inline-block h-0.5 w-3 rounded-full align-middle" style={{ background: color }} aria-hidden="true" />;
 }
 
-export default function MatchupChart({ mode, scoreMax, series, xs, ticks, contentWidth, nameA, nameB, colorA, colorB, scrollRef, onScroll, events, scores, shownIndex, showTooltip, onCursor, onCursorEnd }) {
+// A phone reads values here instead of in a tooltip, which would cover most of the chart.
+// It always has a reading to show, so the chart below never shifts.
+function Readout({ point, title, latest, nameA, nameB, colorA, colorB, canZoom, fit, onToggleZoom, onClose }) {
+  return (
+    <div className="mb-1 text-xs">
+      <div className="flex min-h-11 items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-ink-3">{latest ? `Latest · ${formatTime(point.t)}` : formatTime(point.t)}</div>
+          {title && <div className="truncate font-medium text-ink">{title}</div>}
+        </div>
+        {canZoom && (
+          <button type="button" onClick={onToggleZoom} className="min-h-11 shrink-0 rounded-md bg-raised px-2.5 font-medium text-ink-2">
+            {fit ? 'Zoom in' : 'Fit week'}
+          </button>
+        )}
+        <button type="button" onClick={onClose} className="min-h-11 shrink-0 rounded-md bg-raised px-2.5 font-medium text-ink-2">
+          Close<span aria-hidden="true"> ▲</span>
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-x-3" aria-live="polite">
+        {[[nameA, point.a, point.probability, colorA], [nameB, point.b, 1 - point.probability, colorB]].map(([name, team, probability, color]) => (
+          <div key={name} className="min-w-0">
+            <div className="truncate text-ink-2"><ColorKey color={color} />{name}</div>
+            <div className="truncate tabular-nums text-ink-2">
+              <strong className="text-sm text-ink">{formatPercent(probability)}</strong> · {team.points.toFixed(1)} pts
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function MatchupChart({ mode, scoreMax, series, xs, ticks, contentWidth, fit, isPhone, onToggleZoom, onClose, nameA, nameB, colorA, colorB, scrollRef, onScroll, events, scores, shownIndex, showTooltip, onCursor, onCursorEnd }) {
   const [tooltipX, setTooltipX] = useState(0);
   const [visibleWidth, setVisibleWidth] = useState(0);
+  const [edges, setEdges] = useState({ before: false, after: false });
   const scroller = useRef(null);
   const clipId = useId();
 
@@ -61,17 +99,29 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
     scrollRef(el);
   }, [scrollRef]);
 
+  // Phones hide scrollbars, so a fade at the edge is what says there's more chart that way.
+  const updateEdges = useCallback((el) => {
+    const before = el.scrollLeft > 1;
+    const after = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setEdges((prev) => (prev.before === before && prev.after === after ? prev : { before, after }));
+  }, []);
+
   useEffect(() => {
     const el = scroller.current;
     if (!el) return undefined;
-    const observer = new ResizeObserver(() => setVisibleWidth(el.clientWidth));
+    const observer = new ResizeObserver(() => {
+      setVisibleWidth(el.clientWidth);
+      updateEdges(el);
+    });
     observer.observe(el);
+    observer.observe(el.firstElementChild);
     return () => observer.disconnect();
-  }, []);
+  }, [updateEdges]);
 
   // A short stretch of games fills the chart instead of leaving blank space on the right.
   const plotWidth = visibleWidth - LEFT_PAD - RIGHT_PAD;
-  const stretch = contentWidth > 0 && plotWidth > contentWidth ? plotWidth / contentWidth : 1;
+  const canZoom = plotWidth > 0 && contentWidth > plotWidth;
+  const stretch = contentWidth > 0 && plotWidth > 0 && (fit || plotWidth > contentWidth) ? plotWidth / contentWidth : 1;
 
   const points = useMemo(
     () => series.map((s, i) => ({
@@ -94,11 +144,26 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
   const hovered = shownIndex === null ? null : points[shownIndex];
   const hoveredEvent = hovered && events.find((e) => e.index === shownIndex);
   const hoveredScores = hovered ? scores.filter((s) => s.index === shownIndex) : [];
-  const labels = useMemo(
-    () => layoutScoreLabels(scores.filter((s) => !s.minor), points, yFor(1), yFor(0), scoreMode ? scoreLineAnchor : undefined),
-    [scores, points, scoreMode],
+  // Fit to the screen, a week has far more marks than room. Every one stays in the Moments list.
+  const squeezed = fit && stretch < 1;
+  const shownScores = useMemo(() => {
+    const major = scores.filter((s) => !s.minor);
+    return squeezed ? thinMarks(major, (index) => points[index].x, FIT_LABEL_GAP) : major;
+  }, [scores, points, squeezed]);
+  const shownEvents = useMemo(
+    () => (squeezed ? thinMarks(events, (index) => points[index].x, FIT_EVENT_GAP) : events),
+    [events, points, squeezed],
   );
-  const ticksOnLine = scores.filter((s) => s.minor);
+  const labels = useMemo(
+    () => layoutScoreLabels(shownScores, points, yFor(1), yFor(0), scoreMode ? scoreLineAnchor : undefined),
+    [shownScores, points, scoreMode],
+  );
+  const ticksOnLine = squeezed ? [] : scores.filter((s) => s.minor);
+  const shownTicks = ticks.reduce((kept, tick) => {
+    const x = tick.x * stretch + LEFT_PAD;
+    if (kept.length === 0 || x - kept.at(-1).x >= (squeezed ? FIT_TICK_GAP : MIN_TICK_GAP)) kept.push({ t: tick.t, x });
+    return kept;
+  }, []);
 
   const nearestIndex = (x) => {
     let best = 0;
@@ -106,7 +171,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
       if (Math.abs(p.x - x) < Math.abs(points[best].x - x)) best = i;
     });
     // A key moment is a small target, so the cursor snaps to one close by.
-    const nearbyEvent = [...scores, ...events].find((e) => Math.abs(points[e.index].x - x) <= EVENT_SNAP_PX);
+    const nearbyEvent = [...shownScores, ...ticksOnLine, ...shownEvents].find((e) => Math.abs(points[e.index].x - x) <= EVENT_SNAP_PX);
     return nearbyEvent ? nearbyEvent.index : best;
   };
 
@@ -167,9 +232,25 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
   const leftAxis = scoreMode ? [scoreMax, scoreMax / 2, 0] : ['100%', '50%', '100%'];
 
   return (
-    <>
+    /* On a phone the chart stays in view under the week bar while the list below it scrolls. */
+    <div className="z-20 -mx-3 bg-surface px-3 max-sm:top-[60px] max-sm:border-b max-sm:border-line max-sm:pb-1 sm:mx-0 sm:px-0 max-sm:[@media(min-height:600px)]:sticky">
+    {isPhone && (
+      <Readout
+        point={hovered ?? last}
+        title={hovered ? (hoveredScores.length > 0 ? hoveredScores.map((s) => s.title).join(' · ') : hoveredEvent?.title) : null}
+        latest={!hovered}
+        nameA={nameA}
+        nameB={nameB}
+        colorA={colorA}
+        colorB={colorB}
+        canZoom={canZoom}
+        fit={fit}
+        onToggleZoom={onToggleZoom}
+        onClose={onClose}
+      />
+    )}
     {/* Score lines can run anywhere in the plot, so their key sits above it. */}
-    {scoreMode && (
+    {scoreMode && !isPhone && (
       <div className="mb-1 flex flex-wrap gap-x-4 gap-y-0.5 pl-9 text-xs font-medium text-ink-2 sm:pl-11">
         <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorA} />{nameA}</span>
         <span className="min-w-0 [overflow-wrap:anywhere]"><ColorKey color={colorB} />{nameB}</span>
@@ -185,14 +266,14 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
         {!scoreMode && (
           <>
             <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(1) + 2 }}>
-              <ColorKey color={colorA} />↑ {nameA}
+              <ColorKey color={colorA} />↑{!isPhone && ` ${nameA}`}
             </div>
             <div className="pointer-events-none absolute left-2 z-10 max-w-[80%] truncate rounded bg-surface/85 px-1 text-xs font-medium text-ink-2" style={{ top: yFor(0) - 20 }}>
-              <ColorKey color={colorB} />↓ {nameB}
+              <ColorKey color={colorB} />↓{!isPhone && ` ${nameB}`}
             </div>
           </>
         )}
-        {hovered && showTooltip && (
+        {hovered && showTooltip && !isPhone && (
           <div
             className="pointer-events-none absolute top-2 z-20 rounded-md border border-line bg-surface p-2 text-xs shadow-md"
             style={{ width: TOOLTIP_WIDTH, left: tooltipX }}
@@ -216,7 +297,16 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
             ))}
           </div>
         )}
-        <div ref={attachScroller} onScroll={onScroll} className="overflow-x-auto">
+        {edges.before && <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-5 bg-gradient-to-r from-surface" aria-hidden="true" />}
+        {edges.after && <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-gradient-to-l from-surface" aria-hidden="true" />}
+        <div
+          ref={attachScroller}
+          onScroll={(event) => {
+            updateEdges(event.currentTarget);
+            onScroll(event);
+          }}
+          className="scroll-mt-[72px] overflow-x-auto overscroll-x-contain"
+        >
           <div className="relative" style={{ width: svgWidth, minWidth: '100%' }}>
             <svg
               width="100%"
@@ -236,8 +326,8 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
                 <line key={p} x1={0} x2="100%" y1={yFor(p)} y2={yFor(p)} stroke={GRID} />
               ))}
               <line x1={0} x2="100%" y1={yFor(0.5)} y2={yFor(0.5)} stroke={scoreMode ? GRID : MIDLINE} />
-              {ticks.map((tick) => {
-                const x = tick.x * stretch + LEFT_PAD;
+              {shownTicks.map((tick) => {
+                const { x } = tick;
                 return (
                   <g key={tick.t}>
                     <line x1={x} x2={x} y1={yFor(0)} y2={yFor(0) + 4} stroke={MIDLINE} />
@@ -263,7 +353,7 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
                   <path d={solid} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
                 </g>
               )))}
-              {events.map((event) => (
+              {shownEvents.map((event) => (
                 <circle
                   key={event.t}
                   cx={points[event.index].x}
@@ -336,6 +426,6 @@ export default function MatchupChart({ mode, scoreMax, series, xs, ticks, conten
         </div>
       </div>
     </div>
-    </>
+    </div>
   );
 }

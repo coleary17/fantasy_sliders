@@ -36,8 +36,8 @@ export async function loadWeekReadings({ season, schedule }) {
   try {
     const recorded = new Set(await loadWeekKeys());
     const keys = schedule.map(({ week }) => weekKey(season, week)).filter((key) => recorded.has(key));
-    return (await Promise.all(keys.map(loadWeek))).map(weekReading).filter(Boolean);
+    return { readings: (await Promise.all(keys.map(loadWeek))).map(weekReading).filter(Boolean), failed: false };
   } catch {
-    return []; // the rest of the season can still be simulated from scoring averages
+    return { readings: [], failed: true }; // the rest of the season can still be simulated from scoring averages
   }
 }

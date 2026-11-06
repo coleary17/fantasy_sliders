@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import HelpText from '../HelpText';
+import PageHeader from '../PageHeader';
+import { startPolling } from '../polling';
+import useIsPhone from '../useIsPhone';
 import MatchupRow from './MatchupRow';
 import { findEvents } from './events';
 import { findScores } from './scoring';
-import { closestFirst, formatTime, layoutTimeline, loadWeek, loadWeekKeys, matchupKey, matchupSeries, scoreAxisMax } from './data';
+import { closestFirst, formatTime, indexAtTime, layoutTimeline, loadWeek, loadWeekKeys, matchupKey, matchupSeries, scoreAxisMax } from './data';
 
 const REFRESH_MS = 60_000;
 
@@ -37,12 +41,16 @@ export default function WinProbabilityPage() {
   const [expanded, setExpanded] = useState(() => new Set());
   const [cursor, setCursor] = useState(null); // { t, source: matchup key, pinned }
   const [mode, setMode] = useState(savedMode);
+  const [zoomed, setZoomed] = useState(false);
+  const isPhone = useIsPhone();
+  const fit = isPhone && !zoomed; // a phone starts on the whole week, and zooming in scrolls it
   const scrollers = useRef(new Map());
   const stickToEnd = useRef(true);
   const ownScrolls = useRef(new WeakMap()); // where the page itself last moved each chart
   const sharedScrollLeft = useRef(0);
 
   const activeKey = selected ?? keys?.at(-1) ?? null;
+  const pastWeek = selected !== null && keys !== null && selected !== keys.at(-1); // won't change, so no polling
 
   useEffect(() => {
     let cancelled = false;
@@ -66,12 +74,12 @@ export default function WinProbabilityPage() {
       }
     };
     refresh();
-    const timer = setInterval(refresh, REFRESH_MS);
+    const stopPolling = pastWeek ? null : startPolling(refresh, REFRESH_MS);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stopPolling?.();
     };
-  }, [selected]);
+  }, [selected, pastWeek]);
 
   const timeline = useMemo(() => (doc ? layoutTimeline(doc.snapshots) : null), [doc]);
   const matchups = useMemo(() => new Map((doc?.matchups ?? []).map((pair) => {
@@ -113,7 +121,7 @@ export default function WinProbabilityPage() {
     scrollers.current.forEach((el) => {
       scrollChart(el, stickToEnd.current ? el.scrollWidth - el.clientWidth : sharedScrollLeft.current);
     });
-  }, [doc, expanded, scrollChart]);
+  }, [doc, expanded, fit, scrollChart]);
 
   // A tap anywhere else lets go of the selected moment. A finger that scrolls never gets here,
   // because the browser cancels the touch instead of ending it.
@@ -136,11 +144,23 @@ export default function WinProbabilityPage() {
       scrollChart(el, Math.max(0, timeline.xs[event.index] - el.clientWidth / 2));
       sharedScrollLeft.current = el.scrollLeft;
     });
+    // The moment may be far down its list, so make sure its chart is on screen to show it.
+    scrollers.current.get(source)?.scrollIntoView({ block: 'nearest' });
+  };
+
+  // Zooming in on a selected moment should land on that moment.
+  const toggleZoom = () => {
+    if (cursor && !zoomed) {
+      const index = indexAtTime(matchups.get(cursor.source).series, cursor.t);
+      const [el] = scrollers.current.values();
+      stickToEnd.current = false;
+      sharedScrollLeft.current = Math.max(0, timeline.xs[index] - (el?.clientWidth ?? 0) / 2);
+    }
+    setZoomed(!zoomed);
   };
 
   const selectWeek = (key) => {
     stickToEnd.current = true;
-    setDoc(null);
     setCursor(null);
     setExpanded(new Set());
     setSelected(key);
@@ -169,16 +189,11 @@ export default function WinProbabilityPage() {
 
   return (
     <div className="min-h-screen bg-page pb-12">
-      <div className="bg-gradient-to-r from-blue-800 to-purple-800 px-4 py-3 text-white shadow-lg sm:p-6">
-        <div className="mx-auto max-w-7xl">
-          <h1 className="text-xl font-bold sm:mb-2 sm:text-3xl md:text-4xl">The New World Order</h1>
-          <div className="text-sm sm:text-lg md:text-xl">Matchup win probability</div>
-        </div>
-      </div>
+      <PageHeader view="Matchup win probability" />
 
       <main className="mx-auto max-w-7xl px-2 pb-4 sm:px-4 sm:pb-6">
-        {error && !doc && (
-          <p role="alert" className="rounded-lg bg-surface p-4 text-ink-2 shadow">
+        {error && !docMatches && (
+          <p role="alert" className="mt-2 rounded-lg bg-surface p-4 text-ink-2 shadow">
             Couldn&apos;t load win probability data ({error}).
           </p>
         )}
@@ -201,6 +216,7 @@ export default function WinProbabilityPage() {
                 <option key={key} value={key}>Week {weekNumber(key)}</option>
               ))}
             </select>
+            {!docMatches && !error && <div className="text-xs text-ink-2 sm:text-sm">Loading…</div>}
             {cursor && docMatches && (
               <div className="flex shrink-0 items-center gap-2 text-right text-xs text-ink sm:text-sm">
                 <span>Viewing {formatTime(cursor.t)}</span>
@@ -215,16 +231,20 @@ export default function WinProbabilityPage() {
             )}
             {!cursor && lastUpdate && docMatches && (
               <div className="shrink-0 text-right text-xs text-ink-2 sm:text-sm">
-                {lastUpdate.live ? <>Games in progress<br className="sm:hidden" /><span className="hidden sm:inline"> · </span></> : ''}Updated {formatTime(lastUpdate.t)}
+                {error
+                  ? <>Couldn&apos;t update<br className="sm:hidden" /><span className="hidden sm:inline"> · </span>Last updated {formatTime(lastUpdate.t)}</>
+                  : <>{lastUpdate.live ? <>Games in progress<br className="sm:hidden" /><span className="hidden sm:inline"> · </span></> : ''}Updated {formatTime(lastUpdate.t)}</>}
               </div>
             )}
           </div>
         )}
 
-        {docMatches && timeline && (
-          <>
-            <div className="mb-2 flex items-center justify-between gap-3 px-1">
-              <p className="text-xs text-ink-3">Closest matchups first. Tap one for its full chart and lineups, and move along a chart to step through the week.</p>
+        {!keys && !error && <p className="p-4 text-ink-2">Loading…</p>}
+
+        {doc && timeline && (
+          <div aria-busy={!docMatches} className={docMatches ? '' : 'pointer-events-none opacity-50'}>
+            <div className="mb-2 flex items-start justify-between gap-3 px-1 sm:items-center">
+              <HelpText className="min-w-0 flex-1">Closest matchups first. Tap one for its full chart and lineups, then tap the chart to see any moment in the week.</HelpText>
               <div className="flex shrink-0 gap-1" role="group" aria-label="Chart shows">
                 {MODES.map(([value, label]) => (
                   <button
@@ -265,6 +285,8 @@ export default function WinProbabilityPage() {
                     onCursorEnd={() => endCursor(key)}
                     onSelectEvent={(event) => jumpToEvent(key, event)}
                     timeline={timeline}
+                    fit={fit}
+                    onToggleZoom={toggleZoom}
                     expanded={expanded.has(key)}
                     onToggle={() => toggleMatchup(key)}
                     onScroll={handleScroll}
@@ -276,7 +298,7 @@ export default function WinProbabilityPage() {
                 );
               })}
             </div>
-          </>
+          </div>
         )}
 
         {docMatches && (

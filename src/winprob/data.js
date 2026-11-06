@@ -2,10 +2,19 @@ import { winProbability } from '../../lib/model.mjs';
 
 // The hosted site reads from the Netlify function. Local dev has no functions,
 // so it falls back to the files written by scripts/collect-local.mjs.
+// Revalidating means an unchanged week costs a 304, and handing back the same object means
+// the page has nothing to recalculate for it.
+const seen = new Map();
+
 async function fetchJson(url) {
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, { cache: 'no-cache' });
   if (!res.ok) throw new Error(`${res.status} from ${url}`);
-  return res.json();
+  const etag = res.headers.get('etag');
+  const previous = seen.get(url);
+  if (etag && previous?.etag === etag) return previous.json;
+  const json = await res.json();
+  seen.set(url, { etag, json });
+  return json;
 }
 
 export async function loadWeekKeys() {

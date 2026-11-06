@@ -1,7 +1,11 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { applyPicks, applyReadings, formatOdds, lastPickedWeek, playoffOdds, projectedScores, sortStandings, tableAfterWeeks } from '../../lib/playoffs.mjs';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { applyPicks, applyReadings, biggestMovers, formatOdds, lastPickedWeek, projectedScores, prunePicks, sortStandings, tableAfterWeeks } from '../../lib/playoffs.mjs';
+import PageHeader from '../PageHeader';
+import { startPolling } from '../polling';
 import { formatTime } from '../winprob/data';
 import { loadSeason, loadWeekReadings } from './data';
+import { loadPicks, savePicks } from './picks';
+import useSimulatedOdds from './useSimulatedOdds';
 import WhatIfMatchups from './WhatIfMatchups';
 
 const REFRESH_MS = 60_000;
@@ -20,27 +24,73 @@ function OddsChange({ baseline, odds }) {
   );
 }
 
+const sameReadings = (a, b) => a.length === b.length && a.every((reading, i) => reading.week === b[i].week && reading.t === b[i].t);
+
+// On a phone the table sits far above the games, so this shows what a pick just changed.
+function OddsBar({ rows, tableVisible, returning, onViewTable, onReturn }) {
+  const movers = biggestMovers(rows, 2);
+  if (tableVisible && !returning) return null;
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface px-3 py-1.5 shadow-lg max-sm:bottom-[calc(3.5rem+1px+env(safe-area-inset-bottom))] lg:hidden">
+      <div className="mx-auto flex min-h-11 max-w-3xl items-center gap-3">
+        {tableVisible ? (
+          <button type="button" onClick={onReturn} className="min-h-11 flex-1 rounded-md bg-blue-600 px-3 text-sm font-semibold text-white">
+            <span aria-hidden="true">↓ </span>Back to your picks
+          </button>
+        ) : (
+          <>
+            <div className="min-w-0 flex-1 text-xs text-ink-2">
+              {movers.length === 0 && 'No change to anyone\'s odds yet'}
+              {movers.map((team) => (
+                <div key={team.id} className="flex justify-between gap-2">
+                  <span className="truncate">{team.name}</span>
+                  <span className="shrink-0 font-semibold tabular-nums text-ink">
+                    <span aria-hidden="true">{team.change > 0 ? '▲' : '▼'} </span>
+                    <span className="sr-only">{team.change > 0 ? 'up' : 'down'} </span>
+                    {Math.abs(team.change)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={onViewTable} className="min-h-11 shrink-0 rounded-md bg-raised px-3 text-sm font-medium text-ink">
+              View table
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PlayoffOddsPage() {
   const [season, setSeason] = useState(null);
   const [readings, setReadings] = useState([]);
   const [picks, setPicks] = useState({}); // week number -> that week's picks
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [error, setError] = useState(null);
-  const deferredPicks = useDeferredValue(picks); // keeps the slider smooth while odds catch up
+  const [updateFailed, setUpdateFailed] = useState(false);
+  const [tableVisible, setTableVisible] = useState(true);
+  const [returnY, setReturnY] = useState(null); // where "View table" was tapped
+  const tableRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    let timer;
+    let stopPolling = null;
     (async () => {
       try {
         const loaded = await loadSeason();
-        const loadedReadings = await loadWeekReadings(loaded);
+        const first = await loadWeekReadings(loaded);
         if (cancelled) return;
-        setReadings(loadedReadings);
+        setReadings(first.readings);
+        setUpdateFailed(first.failed);
+        setPicks(prunePicks(loadPicks(loaded.season), loaded.schedule));
         setSeason(loaded);
-        timer = setInterval(async () => {
+        stopPolling = startPolling(async () => {
           const next = await loadWeekReadings(loaded);
-          if (!cancelled && next.length > 0) setReadings(next);
+          if (cancelled) return;
+          setUpdateFailed(next.failed);
+          // Unchanged readings keep their identity, so the odds aren't simulated again for nothing.
+          if (!next.failed) setReadings((prev) => (sameReadings(prev, next.readings) ? prev : next.readings));
         }, REFRESH_MS);
       } catch (err) {
         if (!cancelled) setError(err.message);
@@ -48,9 +98,14 @@ export default function PlayoffOddsPage() {
     })();
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stopPolling?.();
     };
   }, []);
+
+  const updatePicks = (next) => {
+    setPicks(next);
+    savePicks(season.season, next);
+  };
 
   const latest = readings.at(-1);
   const matchupWeeks = useMemo(() => (season?.schedule ?? []).filter((w) => w.pairs.length > 0), [season]);
@@ -59,23 +114,25 @@ export default function PlayoffOddsPage() {
     ?? matchupWeeks[0];
   const schedule = useMemo(() => (season ? applyReadings(season.schedule, readings) : []), [season, readings]);
 
-  const baseline = useMemo(() => (season ? playoffOdds({
+  const lastPicked = lastPickedWeek(picks);
+  const hasPicks = lastPicked !== null;
+  const lockedSchedule = useMemo(
+    () => (season ? applyPicks(schedule, picks, season.teams) : []),
+    [season, schedule, picks],
+  );
+
+  const baseline = useSimulatedOdds(useMemo(() => (season ? {
     teams: season.teams,
     schedule,
     playoffSpots: season.playoffSpots,
-  }) : {}), [season, schedule]);
-
-  const lastPicked = lastPickedWeek(deferredPicks);
-  const hasPicks = lastPicked !== null;
-  const lockedSchedule = useMemo(
-    () => (season ? applyPicks(schedule, deferredPicks, season.teams) : []),
-    [season, schedule, deferredPicks],
-  );
-  const odds = useMemo(() => (season && hasPicks ? playoffOdds({
+  } : null), [season, schedule]));
+  const pickedOdds = useSimulatedOdds(useMemo(() => (season && hasPicks ? {
     teams: season.teams,
     schedule: lockedSchedule,
     playoffSpots: season.playoffSpots,
-  }) : baseline), [season, lockedSchedule, hasPicks, baseline]);
+  } : null), [season, lockedSchedule, hasPicks]), { quick: true });
+  const odds = (hasPicks && pickedOdds) || baseline;
+  const ready = season && baseline;
 
   // With picks, the table shows where everyone stands after the last picked week.
   const table = useMemo(() => {
@@ -84,8 +141,8 @@ export default function PlayoffOddsPage() {
     return tableAfterWeeks(season.teams, lockedSchedule.filter((w) => w.week <= lastPicked));
   }, [season, lockedSchedule, lastPicked, hasPicks]);
 
-  const rows = useMemo(() => (season ? sortStandings(table)
-    .map((team) => ({ ...team, odds: odds[team.id], baseline: baseline[team.id] })) : []), [season, table, odds, baseline]);
+  const rows = useMemo(() => (ready ? sortStandings(table)
+    .map((team) => ({ ...team, odds: odds[team.id], baseline: baseline[team.id] })) : []), [ready, table, odds, baseline]);
 
   const names = useMemo(() => Object.fromEntries((season?.teams ?? []).map((team) => [team.id, team.name])), [season]);
 
@@ -101,14 +158,30 @@ export default function PlayoffOddsPage() {
   const recordedWeeks = readings.map((r) => r.week).join(' and ');
   const showMatchups = matchupWeeks.length > 0;
 
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!ready || !table) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      setTableVisible(entry.isIntersecting);
+      if (!entry.isIntersecting) setReturnY(null);
+    }, { threshold: 0.3 });
+    observer.observe(table);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only needs to start once the table exists
+  }, [Boolean(ready)]);
+
+  const viewTable = () => {
+    setReturnY(window.scrollY);
+    tableRef.current?.scrollIntoView({ block: 'start' });
+  };
+  const returnToPicks = () => {
+    window.scrollTo(0, returnY);
+    setReturnY(null);
+  };
+
   return (
-    <div className="min-h-screen bg-page pb-12">
-      <div className="bg-gradient-to-r from-blue-800 to-purple-800 px-4 py-3 text-white shadow-lg sm:p-6">
-        <div className="mx-auto max-w-7xl">
-          <h1 className="text-xl font-bold sm:mb-2 sm:text-3xl md:text-4xl">The New World Order</h1>
-          <div className="text-sm sm:text-lg md:text-xl">Playoff odds</div>
-        </div>
-      </div>
+    <div className={`min-h-screen bg-page pb-12 ${hasPicks ? 'max-lg:pb-24' : ''}`}>
+      <PageHeader view="Playoff odds" />
 
       <main className={`mx-auto px-2 py-4 sm:px-4 sm:py-6 ${showMatchups ? 'max-w-7xl' : 'max-w-3xl'}`}>
         {error && (
@@ -116,17 +189,17 @@ export default function PlayoffOddsPage() {
             Couldn&apos;t load playoff odds ({error}).
           </p>
         )}
-        {!error && !season && <p className="p-4 text-ink-2">Loading…</p>}
+        {!error && !ready && <p className="p-4 text-ink-2">Loading…</p>}
 
-        {season && (
+        {ready && (
           <>
             <div className={showMatchups ? 'grid items-start gap-6 lg:grid-cols-2' : ''}>
               <div className="lg:sticky lg:top-4 lg:order-2">
-                <div className="mb-2 flex items-baseline justify-between gap-3 px-1 text-xs text-ink-2 sm:text-sm">
+                <div ref={tableRef} className="mb-2 flex scroll-mt-2 items-baseline justify-between gap-3 px-1 text-xs text-ink-2 sm:text-sm">
                   <span>Top {season.playoffSpots} make the playoffs</span>
                   {latest && !hasPicks && (
                     <span className="text-right">
-                      {latest.live ? 'Games in progress · ' : ''}Updated {formatTime(latest.t)}
+                      {updateFailed ? 'Couldn\'t update · last ' : ''}{!updateFailed && latest.live ? 'Games in progress · ' : ''}{updateFailed ? 'updated' : 'Updated'} {formatTime(latest.t)}
                     </span>
                   )}
                   {hasPicks && <span className="text-right font-medium text-ink">Your picks through Week {lastPicked}</span>}
@@ -183,7 +256,7 @@ export default function PlayoffOddsPage() {
                     final={final}
                     projected={projected}
                     picksByWeek={picks}
-                    onPicksChange={setPicks}
+                    onPicksChange={updatePicks}
                   />
                 </div>
               )}
@@ -196,6 +269,15 @@ export default function PlayoffOddsPage() {
                     Future weeks use season scoring pulled toward the league average, allowing for teams getting better or worse. They don&apos;t look at
                     rosters or injuries.{readings.length > 0 ? ` ${readings.length > 1 ? `Weeks ${recordedWeeks} use` : `Week ${recordedWeeks} uses`} the same live estimates as the win probability page.` : ''}</>}
               </p>
+            {hasPicks && (
+              <OddsBar
+                rows={rows}
+                tableVisible={tableVisible}
+                returning={returnY !== null}
+                onViewTable={viewTable}
+                onReturn={returnToPicks}
+              />
+            )}
           </>
         )}
       </main>

@@ -1,38 +1,59 @@
 import { useRef } from 'react';
 import { DEFAULT_MARGIN, formatOdds, lastPickedWeek, normalizeMargin, whatIfScores } from '../../lib/playoffs.mjs';
+import HelpText from '../HelpText';
 
 const SLIDER_MIN = 1;
 const SLIDER_MAX = 70;
+const MARGIN_PRESETS = [['Close', 5], ['Solid', 15], ['Blowout', 40]];
 
 function MarginInput({ margin, onChange, label }) {
   const sliderValue = normalizeMargin(margin);
   const filled = ((sliderValue - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
   return (
-    <div className="mt-3 flex flex-col items-center gap-3">
-      <label className="flex items-center gap-2 text-sm text-ink-2">
-        Margin
-        <input
-          type="number"
-          value={margin}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => onChange(normalizeMargin(e.target.value))}
-          min={SLIDER_MIN}
-          max={SLIDER_MAX}
-          step="0.1"
-          className="h-9 w-20 rounded border border-line bg-raised text-center font-mono text-ink focus:border-blue-500 focus:outline-none"
-          style={{ fontSize: '16px' }} // Prevents zoom on iOS
-          aria-label={`Margin of victory for ${label}`}
-        />
-      </label>
+    <div className="mt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1" role="group" aria-label={`Margin of victory for ${label}`}>
+          {MARGIN_PRESETS.map(([name, value]) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => onChange(value)}
+              aria-pressed={sliderValue === value}
+              className={`min-h-11 rounded-md border px-2.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                sliderValue === value ? 'border-blue-500 bg-raised text-ink' : 'border-line text-ink-2 hover:bg-raised'
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 text-sm text-ink-2">
+          <span className="sr-only sm:not-sr-only">Margin</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={margin}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={(e) => onChange(normalizeMargin(e.target.value))}
+            min={SLIDER_MIN}
+            max={SLIDER_MAX}
+            step="0.1"
+            className="h-11 w-16 rounded border border-line bg-raised text-center font-mono text-ink focus:border-blue-500 focus:outline-none"
+            style={{ fontSize: '16px' }} // Prevents zoom on iOS
+            aria-label={`Margin of victory for ${label}, in points`}
+          />
+        </label>
+      </div>
+      {/* Whole points, since a finger can't land on a tenth. The box above takes decimals. */}
       <input
         type="range"
         min={SLIDER_MIN}
         max={SLIDER_MAX}
-        step="0.1"
+        step="1"
         value={sliderValue}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-3 w-full max-w-xs cursor-pointer appearance-none rounded-lg touch-manipulation sm:h-4"
-        style={{ background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${filled}%, #34342f ${filled}%, #34342f 100%)` }}
+        className="range-input mt-1 block w-full"
+        style={{ '--fill': `${filled}%` }}
         aria-label={`Margin slider for ${label}`}
       />
     </div>
@@ -138,9 +159,9 @@ export default function WhatIfMatchups({ week, weeks, onWeekChange, pairs, names
         </div>
       </div>
       <WeekPicker week={week} weeks={weeks} picksByWeek={picksByWeek} lastPicked={lastPicked} onWeekChange={onWeekChange} />
-      <p className="mb-3 px-1 text-xs text-ink-3">
+      <HelpText className="mb-3 px-1">
         Pick a winner to see how that result changes everyone&apos;s odds, then keep going week by week through Week {weeks.at(-1)}. The loser scores 110, and the margin sets the winner&apos;s score. Every game you haven&apos;t picked, up to your last picked week, counts as its projected result. Tap a picked team again to undo it.
-      </p>
+      </HelpText>
       {lockedAsProjected && (
         <p className="mb-3 px-1 text-xs font-medium text-ink-2">You picked a later week, so these games count as their projected results.</p>
       )}

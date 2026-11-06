@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findScores, formatStatLine, keyMoments, layoutScoreLabels, scoreLineAnchor, statsAt, LABEL_HEIGHT } from './scoring.js';
+import { findScores, formatStatLine, keyMoments, layoutScoreLabels, scoreLineAnchor, statsAt, thinMarks, LABEL_HEIGHT } from './scoring.js';
 import { scoreAxisMax, scoreShare } from './data.js';
 
 const players = {
@@ -177,4 +177,15 @@ test('the score axis rounds up to the next 25 and never starts tiny', () => {
 test('a score below zero sits on the baseline of the axis', () => {
   assert.equal(scoreShare(-1.5, 100), 0);
   assert.equal(scoreShare(50, 100), 0.5);
+});
+
+test('a squeezed chart keeps the biggest swings and drops what would crowd them', () => {
+  const marks = [
+    { index: 0, from: 0.5, to: 0.55 },
+    { index: 1, from: 0.5, to: 0.8 },
+    { index: 2, from: 0.5, to: 0.6 },
+    { index: 9, from: 0.6, to: 0.4 },
+  ];
+  const kept = thinMarks(marks, (index) => index * 10, 25);
+  assert.deepEqual(kept.map((mark) => mark.index), [1, 9], 'in chart order, with the bigger swing winning a crowded spot');
 });

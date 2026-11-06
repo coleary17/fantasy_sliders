@@ -195,6 +195,17 @@ export function layoutScoreLabels(scores, points, top, bottom, anchor = probabil
   });
 }
 
+// The biggest swings that fit on a squeezed chart, at least `minGap` pixels apart.
+export function thinMarks(marks, xAt, minGap) {
+  const kept = [];
+  [...marks]
+    .sort((x, y) => Math.abs(y.to - y.from) - Math.abs(x.to - x.from))
+    .forEach((mark) => {
+      if (kept.every((other) => Math.abs(xAt(other.index) - xAt(mark.index)) >= minGap)) kept.push(mark);
+    });
+  return kept.sort((x, y) => x.index - y.index);
+}
+
 // A player's box score at a time. With no time, the latest one.
 export function statsAt(doc, id, t) {
   const history = doc.stats?.[id];
